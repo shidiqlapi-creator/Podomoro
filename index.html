@@ -1,0 +1,2341 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>SylvaFocus — Pelacak Waktu & Hutan Virtual</title>
+  <meta name="description" content="Tanam pohon, jaga fokusmu. Timer fokus dengan hutan virtual." />
+  <meta name="theme-color" content="#3b6448" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="SylvaFocus" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js untuk Grafik Dasbor -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Plus Jakarta Sans', 'sans-serif'],
+          },
+          colors: {
+            forest: {
+              50: '#f3f7f4',
+              100: '#e2ece4',
+              200: '#c5d9ca',
+              300: '#9cbea5',
+              400: '#6f9c7c',
+              500: '#4e7f5d',
+              600: '#3b6448',
+              700: '#30503b',
+              800: '#284130',
+              900: '#213628',
+            },
+            earth: {
+              50: '#faf8f5',
+              100: '#f2ede4',
+              200: '#e4d8c6',
+              300: '#d1bca0',
+              500: '#9c7853',
+              700: '#6b4e33',
+              900: '#42301f',
+            },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* Animasi Halus untuk Tanaman & UI */
+    @keyframes sway {
+      0%, 100% { transform: rotate(-1.8deg); }
+      50% { transform: rotate(1.8deg); }
+    }
+    @keyframes floatSlow {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-5px); }
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.95); opacity: 0.7; }
+      70% { transform: scale(1.06); opacity: 0; }
+      100% { transform: scale(1.06); opacity: 0; }
+    }
+    .animate-sway {
+      transform-origin: 100px 175px;
+      animation: sway 4.5s ease-in-out infinite;
+    }
+    .animate-float {
+      animation: floatSlow 3.5s ease-in-out infinite;
+    }
+    .pulse-ring {
+      animation: pulseRing 2.5s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+    }
+    /* Custom Range Slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 8px;
+      border-radius: 999px;
+      background: #c5d9ca;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #3b6448;
+      border: 3px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      margin-top: -7px;
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+    /* Scrollbar halus */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f3f7f4;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #c5d9ca;
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body class="bg-earth-50 text-forest-900 min-h-screen flex flex-col selection:bg-forest-200 selection:text-forest-900">
+
+  <!-- Toast / Notifikasi Melayang (Pengganti alert) -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- Modal Konfirmasi Custom (Pengganti confirm) -->
+  <div id="custom-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-forest-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-forest-100 transform transition-all">
+      <div class="flex items-center gap-3 mb-3">
+        <div id="modal-icon" class="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-bold">
+          ⚠️
+        </div>
+        <h3 id="modal-title" class="font-display text-lg font-bold text-forest-900">Konfirmasi Tindakan</h3>
+      </div>
+      <p id="modal-message" class="text-sm text-forest-700 leading-relaxed mb-6">
+        Apakah kamu yakin?
+      </p>
+      <div class="flex justify-end gap-3">
+        <button id="modal-cancel-btn" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-forest-700 bg-forest-50 hover:bg-forest-100 transition">
+          Batal
+        </button>
+        <button id="modal-confirm-btn" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition">
+          Ya, Lanjutkan
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Akun (Firebase Auth) -->
+  <div id="auth-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-forest-900/60 backdrop-blur-sm p-4" onclick="if(event.target===this)closeAuthModal()">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-forest-100 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 id="auth-title" class="font-display text-lg font-bold text-forest-900">Masuk ke SylvaFocus</h3>
+          <p id="auth-sub" class="text-xs text-forest-600 mt-0.5">Simpan hutanmu di cloud dan buka di perangkat mana pun.</p>
+        </div>
+        <button onclick="closeAuthModal()" aria-label="Tutup" class="text-forest-500 hover:text-forest-800 text-lg leading-none p-1">✕</button>
+      </div>
+
+      <div id="auth-out">
+        <button id="auth-google-btn" type="button" onclick="authGoogle()"
+          class="w-full flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl border border-forest-200 bg-white hover:bg-forest-50 text-sm font-semibold text-forest-900 transition">
+          <span class="font-extrabold text-base" style="color:#4285f4">G</span> Lanjut dengan Google
+        </button>
+        <div class="flex items-center gap-3 my-4 text-[11px] text-forest-500">
+          <span class="flex-1 h-px bg-forest-100"></span>atau dengan email<span class="flex-1 h-px bg-forest-100"></span>
+        </div>
+        <form id="auth-form" onsubmit="authSubmit('login');return false" class="space-y-2.5">
+          <input id="auth-email" type="email" autocomplete="email" required placeholder="Email" class="w-full px-3.5 py-2.5 rounded-xl border border-forest-200 bg-forest-50/50 text-sm text-forest-900 placeholder-forest-400 focus:outline-none focus:ring-2 focus:ring-forest-400" />
+          <input id="auth-password" type="password" autocomplete="current-password" required minlength="6" placeholder="Kata sandi (min. 6 karakter)" class="w-full px-3.5 py-2.5 rounded-xl border border-forest-200 bg-forest-50/50 text-sm text-forest-900 placeholder-forest-400 focus:outline-none focus:ring-2 focus:ring-forest-400" />
+          <p id="auth-error" class="hidden text-xs text-rose-600 font-medium leading-snug"></p>
+          <div class="flex gap-2 pt-1">
+            <button id="auth-login-btn" type="submit" class="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-forest-700 hover:bg-forest-800 shadow-sm transition">Masuk</button>
+            <button id="auth-register-btn" type="button" onclick="authSubmit('register')" class="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-forest-800 bg-forest-50 hover:bg-forest-100 border border-forest-200 transition">Daftar</button>
+          </div>
+          <button type="button" onclick="authReset()" class="text-xs text-forest-600 underline underline-offset-2 hover:text-forest-900">Lupa kata sandi?</button>
+        </form>
+        <p class="text-[11px] text-forest-500 mt-4 leading-snug">Tanpa akun, datamu tetap tersimpan di perangkat ini. Saat masuk, data lokal digabung dengan data akun.</p>
+      </div>
+
+      <div id="auth-in" class="hidden">
+        <div class="flex items-center gap-3 mb-4">
+          <div id="auth-avatar" class="w-11 h-11 rounded-full bg-forest-700 text-white flex items-center justify-center font-bold overflow-hidden shrink-0"></div>
+          <div class="min-w-0">
+            <p id="auth-name" class="font-semibold text-forest-900 truncate"></p>
+            <p id="auth-email-label" class="text-xs text-forest-600 truncate"></p>
+          </div>
+        </div>
+        <div class="rounded-2xl bg-forest-50 border border-forest-100 px-4 py-3 mb-4 text-xs text-forest-700 flex items-center gap-2">
+          <span id="auth-dot" class="w-2.5 h-2.5 rounded-full bg-forest-400 shrink-0"></span>
+          <span id="auth-status"></span>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="syncNow()" class="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-forest-800 bg-forest-50 hover:bg-forest-100 border border-forest-200 transition">Sinkronkan</button>
+          <button onclick="authLogout()" class="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition">Keluar</button>
+        </div>
+        <p class="text-[11px] text-forest-500 mt-4 leading-snug">Pohon, koin, tag, dan riwayat disinkronkan. Pengaturan Deep Focus tetap per perangkat.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Tambah Tag Baru -->
+  <div id="tag-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-forest-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-forest-100">
+      <h3 class="font-display text-lg font-bold text-forest-900 mb-1">Buat Tag Kategori Baru</h3>
+      <p class="text-xs text-forest-600 mb-4">Kelompokkan waktu fokusmu agar mudah dianalisis.</p>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-forest-800 mb-1.5">Nama Tag</label>
+          <input id="new-tag-name" type="text" maxlength="20" placeholder="Contoh: Coding, Skripsi, Membaca..."
+            class="w-full px-3.5 py-2.5 rounded-xl border border-forest-200 text-sm focus:outline-none focus:ring-2 focus:ring-forest-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-forest-800 mb-1.5">Pilih Warna Label</label>
+          <div id="tag-color-picker" class="flex flex-wrap gap-2.5">
+            <!-- Diisi via JS -->
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2.5 mt-6">
+        <button onclick="closeTagModal()" class="px-4 py-2 rounded-xl text-sm font-semibold text-forest-700 hover:bg-forest-50 transition">
+          Batal
+        </button>
+        <button onclick="saveNewTag()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-forest-600 hover:bg-forest-700 transition">
+          Simpan Tag
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header & Navigasi Utama -->
+  <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-forest-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <!-- Logo -->
+      <div class="flex items-center gap-2.5">
+        <img src="icon-192.png" alt="Logo SylvaFocus" class="w-10 h-10 rounded-2xl shadow-sm" width="40" height="40" />
+        <div>
+          <h1 class="font-display font-extrabold text-lg sm:text-xl tracking-tight text-forest-900 leading-none">
+            Sylva<span class="text-forest-500">Focus</span>
+          </h1>
+          <p class="text-[11px] text-forest-600 font-medium hidden sm:block">Tanam Pohon, Jaga Fokusmu</p>
+        </div>
+      </div>
+
+      <!-- Navigasi Tab Mobile & Desktop -->
+      <nav class="flex items-center bg-forest-50 p-1 rounded-2xl border border-forest-100">
+        <button onclick="switchTab('focus')" id="nav-focus"
+          class="nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 bg-white text-forest-800 shadow-sm">
+          <span>🌱</span>
+          <span>Fokus</span>
+        </button>
+        <button onclick="switchTab('forest')" id="nav-forest"
+          class="nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-forest-600 hover:text-forest-900">
+          <span>🌲</span>
+          <span>Hutan & Toko</span>
+        </button>
+        <button onclick="switchTab('dashboard')" id="nav-dashboard"
+          class="nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-forest-600 hover:text-forest-900">
+          <span>📊</span>
+          <span>Dasbor</span>
+        </button>
+      </nav>
+
+      <!-- Saldo Koin & Audio Ambient -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Toggle Suara Hujan Ambient -->
+        <button id="ambient-btn" onclick="toggleAmbientSound()" title="Suara Latar Hujan Rintik"
+          class="p-2 sm:px-3 sm:py-1.5 rounded-xl border border-forest-200 bg-forest-50 hover:bg-forest-100 text-forest-700 text-xs font-semibold flex items-center gap-1.5 transition">
+          <span id="ambient-icon">🔇</span>
+          <span class="hidden md:inline" id="ambient-label">Suara Hujan</span>
+        </button>
+
+        <!-- Akun / Sinkronisasi -->
+        <button id="auth-btn" onclick="openAuthModal()" title="Akun & sinkronisasi"
+          class="relative p-2 sm:px-3 sm:py-1.5 rounded-xl border border-forest-200 bg-forest-50 hover:bg-forest-100 text-forest-700 text-xs font-semibold flex items-center gap-1.5 transition">
+          <span>👤</span><span class="hidden sm:inline">Masuk</span>
+        </button>
+
+        <!-- Koin Fokus -->
+        <div class="flex items-center gap-1.5 bg-amber-50 border border-amber-200/80 px-3 py-1.5 rounded-xl shadow-sm">
+          <span class="text-base">🪙</span>
+          <span id="header-coins" class="font-display font-bold text-sm text-amber-800">0</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Banner Peringatan Deep Focus (Muncul jika pengguna pindah tab saat Deep Focus aktif) -->
+  <div id="deep-focus-banner" class="hidden bg-rose-600 text-white px-4 py-2.5 text-center text-xs sm:text-sm font-medium shadow-md">
+    ⚠️ <strong>Peringatan Deep Focus!</strong> Kamu meninggalkan halaman saat sesi berlangsung. Tetap di sini agar pohonmu tidak layu!
+  </div>
+
+  <!-- Konten Utama -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+    <!-- ==================== VIEW 1: TIMER FOKUS ==================== -->
+    <section id="view-focus" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      
+      <!-- Kolom Kiri/Tengah: Lingkaran Timer & Visualisasi Tanaman -->
+      <div class="lg:col-span-7 bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-forest-100 flex flex-col items-center text-center relative overflow-hidden">
+        <!-- Dekorasi Latar Halus -->
+        <div class="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-forest-50 pointer-events-none"></div>
+        <div class="absolute -bottom-24 -left-24 w-64 h-64 rounded-full bg-earth-100/60 pointer-events-none"></div>
+
+        <!-- Status & Mode Deep Focus -->
+        <div class="w-full flex flex-wrap items-center justify-between gap-2 mb-4 z-10">
+          <span id="session-status-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-forest-100 text-forest-800">
+            <span class="w-2 h-2 rounded-full bg-forest-500"></span>
+            Siap Menanam
+          </span>
+
+          <!-- Toggle Deep Focus -->
+          <label class="inline-flex items-center gap-2 cursor-pointer bg-earth-100/80 px-3 py-1.5 rounded-full border border-earth-200 select-none" title="Jika aktif, berpindah tab atau meminimalkan browser terlalu lama akan membuat pohon mati">
+            <input type="checkbox" id="deep-focus-toggle" checked class="sr-only peer" />
+            <div class="w-8 h-4 bg-forest-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all relative peer-checked:bg-forest-600"></div>
+            <span class="text-xs font-semibold text-forest-800">Deep Focus 🔥</span>
+          </label>
+          <select id="deep-focus-grace" title="Toleransi waktu meninggalkan halaman" class="text-xs font-semibold text-forest-800 bg-earth-100/80 border border-earth-200 rounded-full px-2.5 py-1.5">
+            <option value="10">Toleransi 10 dtk</option>
+            <option value="30">Toleransi 30 dtk</option>
+            <option value="60">Toleransi 1 mnt</option>
+            <option value="120">Toleransi 2 mnt</option>
+          </select>
+        </div>
+
+        <!-- Kutipan Motivasi Singkat -->
+        <p id="motivation-quote" class="text-xs sm:text-sm text-forest-600 italic mb-5 z-10 max-w-md">
+          "Mulai tanam benihmu hari ini. Setiap menit fokus membuat pohonmu tumbuh lebih rimbun."
+        </p>
+
+        <!-- Lingkaran Visual Pohon + Progress Ring -->
+        <div class="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center my-1 z-10">
+          <!-- Efek Denyut saat Berjalan -->
+          <div id="timer-pulse" class="hidden absolute inset-2 rounded-full bg-forest-300/30 pulse-ring"></div>
+
+          <!-- SVG Progress Circle -->
+          <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 260 260">
+            <circle cx="130" cy="130" r="116" stroke="#e2ece4" stroke-width="12" fill="#f3f7f4" />
+            <circle id="progress-ring" cx="130" cy="130" r="116" stroke="#4e7f5d" stroke-width="12"
+              stroke-linecap="round" fill="transparent"
+              stroke-dasharray="728.85" stroke-dashoffset="0"
+              class="transition-all duration-500 ease-out" />
+          </svg>
+
+          <!-- Kanvas SVG Tanaman Bertumbuh di Tengah Lingkaran -->
+          <div id="tree-stage-container" class="absolute inset-6 rounded-full flex flex-col items-center justify-center overflow-hidden">
+            <!-- SVG Pohon Dinamis Dirender oleh JS -->
+          </div>
+        </div>
+
+        <!-- Tahap Pertumbuhan Label -->
+        <div class="mt-2 mb-3 z-10">
+          <span id="growth-stage-label" class="text-xs font-semibold uppercase tracking-wider text-forest-600 bg-forest-50 px-3 py-1 rounded-full border border-forest-100">
+            Tahap: Benih Siap Tanam • <span id="selected-species-name">Pohon Oak</span>
+          </span>
+        </div>
+
+        <!-- Tampilan Waktu Hitung Mundur -->
+        <div id="timer-display" class="font-display font-extrabold text-5xl sm:text-6xl text-forest-900 tracking-tight my-2 z-10 tabular-nums">
+          25:00
+        </div>
+
+        <!-- Slider & Preset Durasi (Aktif saat idle) -->
+        <div id="duration-controls" class="w-full max-w-md mt-2 mb-6 z-10 space-y-3">
+          <div class="flex items-center justify-between text-xs font-semibold text-forest-600 px-1">
+            <span>5 mnt</span>
+            <span class="text-forest-800">Geser Durasi Fokus</span>
+            <span>120 mnt</span>
+          </div>
+          <input id="duration-slider" type="range" min="5" max="120" step="5" value="25" class="w-full" />
+          
+          <!-- Tombol Preset Cepat -->
+          <div class="flex flex-wrap justify-center gap-2 pt-1">
+            <button onclick="setDuration(15)" class="preset-btn px-3 py-1 rounded-xl text-xs font-semibold bg-forest-50 hover:bg-forest-100 text-forest-700 border border-forest-200 transition">15 mnt</button>
+            <button onclick="setDuration(25)" class="preset-btn px-3 py-1 rounded-xl text-xs font-semibold bg-forest-600 text-white border border-forest-600 transition">25 mnt (Pomodoro)</button>
+            <button onclick="setDuration(45)" class="preset-btn px-3 py-1 rounded-xl text-xs font-semibold bg-forest-50 hover:bg-forest-100 text-forest-700 border border-forest-200 transition">45 mnt</button>
+            <button onclick="setDuration(60)" class="preset-btn px-3 py-1 rounded-xl text-xs font-semibold bg-forest-50 hover:bg-forest-100 text-forest-700 border border-forest-200 transition">60 mnt</button>
+            <button onclick="setDuration(90)" class="preset-btn px-3 py-1 rounded-xl text-xs font-semibold bg-forest-50 hover:bg-forest-100 text-forest-700 border border-forest-200 transition">90 mnt</button>
+          </div>
+        </div>
+
+        <!-- Tombol Aksi Utama (Mulai / Menyerah) -->
+        <div class="flex flex-wrap items-center justify-center gap-3 w-full max-w-md z-10 mt-2">
+          <button id="start-btn" onclick="startFocusSession()"
+            class="flex-1 min-w-[180px] py-3.5 px-6 rounded-2xl bg-gradient-to-r from-forest-600 to-forest-700 hover:from-forest-700 hover:to-forest-800 text-white font-display font-bold text-base shadow-lg shadow-forest-600/25 transform active:scale-[0.98] transition flex items-center justify-center gap-2">
+            <span>🌱</span>
+            <span>Mulai Tanam</span>
+          </button>
+
+          <button id="giveup-btn" onclick="confirmGiveUp()"
+            class="hidden flex-1 min-w-[180px] py-3.5 px-6 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-display font-bold text-base transform active:scale-[0.98] transition flex items-center justify-center gap-2">
+            <span>🥀</span>
+            <span>Menyerah</span>
+          </button>
+        </div>
+
+        <!-- Estimasi Hadiah Koin -->
+        <p id="reward-preview" class="text-xs text-forest-600 mt-4 z-10">
+          Hadiah jika selesai: <strong class="text-amber-700">+15 Koin Fokus 🪙</strong>
+        </p>
+      </div>
+
+      <!-- Kolom Kanan: Pengaturan Sesi (Tag, Spesies Pohon, Ringkasan Hari Ini) -->
+      <div class="lg:col-span-5 space-y-6">
+        
+        <!-- Kartu Pilih Tag / Kategori -->
+        <div class="bg-white rounded-3xl p-6 shadow-sm border border-forest-100">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h2 class="font-display font-bold text-base text-forest-900">Tag Aktivitas</h2>
+              <p class="text-xs text-forest-600">Pilih kategori untuk melacak alokasi waktumu</p>
+            </div>
+            <button onclick="openTagModal()" class="text-xs font-semibold px-3 py-1.5 rounded-xl bg-forest-50 hover:bg-forest-100 text-forest-700 border border-forest-200 transition">
+              + Tag Baru
+            </button>
+          </div>
+
+          <div id="tag-selector-grid" class="flex flex-wrap gap-2">
+            <!-- Daftar Tag dirender via JS -->
+          </div>
+        </div>
+
+        <!-- Kartu Pilih Spesies Pohon -->
+        <div class="bg-white rounded-3xl p-6 shadow-sm border border-forest-100">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h2 class="font-display font-bold text-base text-forest-900">Spesies Pohon</h2>
+              <p class="text-xs text-forest-600">Pilih bibit pohon yang ingin kamu tanam</p>
+            </div>
+            <button onclick="switchTab('forest')" class="text-xs font-semibold text-forest-600 hover:text-forest-800 underline">
+              Buka Toko →
+            </button>
+          </div>
+
+          <div id="quick-species-grid" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-2.5">
+            <!-- Pilihan Spesies dirender via JS -->
+          </div>
+        </div>
+
+        <!-- Ringkasan Cepat Hari Ini -->
+        <div class="bg-gradient-to-br from-forest-800 to-forest-900 text-white rounded-3xl p-6 shadow-md">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-display font-bold text-base">Progres Fokus Hari Ini</h3>
+            <span id="today-date-label" class="text-xs text-forest-200 bg-white/10 px-2.5 py-1 rounded-lg">Hari Ini</span>
+          </div>
+          <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="bg-white/10 rounded-2xl p-3">
+              <div id="quick-today-minutes" class="font-display font-extrabold text-xl sm:text-2xl text-emerald-300">0m</div>
+              <div class="text-[11px] text-forest-200 mt-0.5">Waktu Fokus</div>
+            </div>
+            <div class="bg-white/10 rounded-2xl p-3">
+              <div id="quick-today-trees" class="font-display font-extrabold text-xl sm:text-2xl text-amber-300">0</div>
+              <div class="text-[11px] text-forest-200 mt-0.5">Pohon Hidup</div>
+            </div>
+            <div class="bg-white/10 rounded-2xl p-3">
+              <div id="quick-today-withered" class="font-display font-extrabold text-xl sm:text-2xl text-rose-300">0</div>
+              <div class="text-[11px] text-forest-200 mt-0.5">Pohon Layu</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 2: HUTAN VIRTUAL & TOKO SPESIES ==================== -->
+    <section id="view-forest" class="hidden space-y-6">
+      
+      <!-- Header Hutan Virtual -->
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-forest-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="font-display font-extrabold text-xl text-forest-900">Hutan Virtualku 🌳</h2>
+          <p class="text-xs sm:text-sm text-forest-600 mt-0.5">
+            Setiap sesi fokus yang selesai menumbuhkan satu pohon sehat. Sesi yang dibatalkan meninggalkan pohon layu sebagai pengingat.
+          </p>
+        </div>
+
+        <!-- Filter Rentang Waktu Hutan -->
+        <div class="flex items-center gap-2 bg-forest-50 p-1.5 rounded-2xl border border-forest-100 self-start sm:self-auto">
+          <button onclick="setForestFilter('today')" id="forest-filter-today"
+            class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-forest-800 shadow-sm transition">
+            Hari Ini
+          </button>
+          <button onclick="setForestFilter('all')" id="forest-filter-all"
+            class="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-forest-600 hover:text-forest-900 transition">
+            Semua Waktu
+          </button>
+        </div>
+      </div>
+
+      <!-- Visualisasi Lahan / Grid Hutan Isometrik-Style -->
+      <div class="bg-gradient-to-b from-forest-100/70 to-earth-100/90 rounded-3xl p-6 sm:p-8 border border-forest-200/80 shadow-inner">
+        <div class="flex items-center justify-between mb-4">
+          <span id="forest-count-summary" class="text-xs font-bold uppercase tracking-wider text-forest-800 bg-white/80 px-3 py-1.5 rounded-xl">
+            Menampilkan 0 Pohon
+          </span>
+          <div class="flex items-center gap-3 text-xs font-medium text-forest-700">
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-forest-500"></span> Hidup</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-stone-500"></span> Layu</span>
+          </div>
+        </div>
+
+        <!-- Grid Pohon -->
+        <div id="virtual-forest-grid" class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3 sm:gap-4">
+          <!-- Kartu pohon dirender via JS -->
+        </div>
+      </div>
+
+      <!-- Toko Spesies Pohon -->
+      <div class="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-forest-100">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+          <div>
+            <h3 class="font-display font-bold text-lg text-forest-900">Koleksi & Toko Bibit Pohon 🏪</h3>
+            <p class="text-xs text-forest-600">Gunakan Koin Fokus yang kamu kumpulkan untuk membuka spesies pohon baru.</p>
+          </div>
+          <div class="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 px-3.5 py-2 rounded-2xl self-start">
+            <span>🪙</span>
+            <span class="text-xs font-semibold text-amber-900">Saldo Kamu: <strong id="shop-coins">0</strong> Koin</span>
+          </div>
+        </div>
+
+        <div id="species-shop-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Item Toko dirender via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 3: DASBOR ANALITIK & RIWAYAT ==================== -->
+    <section id="view-dashboard" class="hidden space-y-6">
+      
+      <!-- Header Dasbor & Tombol Reset Demo -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-3xl p-6 shadow-sm border border-forest-100">
+        <div>
+          <h2 class="font-display font-extrabold text-xl text-forest-900">Dasbor Analitik Produktivitas 📊</h2>
+          <p class="text-xs sm:text-sm text-forest-600 mt-0.5">
+            Evaluasi distribusi waktu fokus berdasarkan kategori tag dan tren konsistensi harianmu.
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="confirmResetDemo()" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-forest-50 hover:bg-forest-100 text-forest-700 border border-forest-200 transition">
+            🔄 Muat Ulang Data Demo
+          </button>
+          <button onclick="confirmClearAllData()" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition">
+            🗑️ Hapus Semua Data
+          </button>
+        </div>
+      </div>
+
+      <!-- 4 Kartu KPI Utama -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-forest-100">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-forest-600">Total Waktu Fokus</span>
+            <span class="w-8 h-8 rounded-xl bg-forest-100 text-forest-700 flex items-center justify-center text-sm">⏱️</span>
+          </div>
+          <div id="kpi-total-time" class="font-display font-extrabold text-2xl sm:text-3xl text-forest-900">0 Jam</div>
+          <p id="kpi-total-minutes-sub" class="text-xs text-forest-500 mt-1">0 menit terkumpul</p>
+        </div>
+
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-forest-100">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-forest-600">Pohon Tumbuh</span>
+            <span class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm">🌲</span>
+          </div>
+          <div id="kpi-healthy-trees" class="font-display font-extrabold text-2xl sm:text-3xl text-emerald-700">0</div>
+          <p id="kpi-success-rate" class="text-xs text-emerald-600 mt-1">Tingkat keberhasilan 100%</p>
+        </div>
+
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-forest-100">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-forest-600">Pohon Layu</span>
+            <span class="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-sm">🥀</span>
+          </div>
+          <div id="kpi-withered-trees" class="font-display font-extrabold text-2xl sm:text-3xl text-rose-600">0</div>
+          <p class="text-xs text-forest-500 mt-1">Sesi terhenti / terdistraksi</p>
+        </div>
+
+        <div class="bg-white rounded-3xl p-5 shadow-sm border border-forest-100">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-forest-600">Koin Fokus</span>
+            <span class="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-sm">🪙</span>
+          </div>
+          <div id="kpi-coins" class="font-display font-extrabold text-2xl sm:text-3xl text-amber-600">0</div>
+          <p class="text-xs text-forest-500 mt-1">Tersedia untuk toko bibit</p>
+        </div>
+      </div>
+
+      <!-- Area Grafik: Distribusi Tag & Tren 7 Hari Terakhir -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Grafik Donut Distribusi Tag -->
+        <div class="lg:col-span-5 bg-white rounded-3xl p-6 shadow-sm border border-forest-100 flex flex-col">
+          <h3 class="font-display font-bold text-base text-forest-900 mb-1">Distribusi Waktu per Tag</h3>
+          <p class="text-xs text-forest-600 mb-4">Proporsi menit fokus berdasarkan kategori tugas</p>
+          <div class="relative flex-1 min-h-[240px] flex items-center justify-center">
+            <canvas id="tagChart"></canvas>
+          </div>
+          <div id="tag-breakdown-list" class="mt-4 space-y-2 border-t border-forest-100 pt-3">
+            <!-- Rincian persentase tag dirender via JS -->
+          </div>
+        </div>
+
+        <!-- Grafik Batang Tren Harian -->
+        <div class="lg:col-span-7 bg-white rounded-3xl p-6 shadow-sm border border-forest-100 flex flex-col">
+          <h3 class="font-display font-bold text-base text-forest-900 mb-1">Tren Fokus 7 Hari Terakhir</h3>
+          <p class="text-xs text-forest-600 mb-4">Total durasi fokus harian (dalam menit)</p>
+          <div class="relative flex-1 min-h-[280px]">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabel Riwayat Sesi Fokus -->
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-forest-100 overflow-hidden">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="font-display font-bold text-base text-forest-900">Riwayat Sesi Fokus</h3>
+            <p class="text-xs text-forest-600">Catatan kronologis seluruh pohon yang ditanam</p>
+          </div>
+          <span id="history-count-badge" class="text-xs font-semibold px-3 py-1 rounded-full bg-forest-50 text-forest-700 border border-forest-100">
+            0 Sesi
+          </span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-forest-100 text-[11px] font-bold uppercase tracking-wider text-forest-500">
+                <th class="py-3 px-3">Waktu</th>
+                <th class="py-3 px-3">Spesies</th>
+                <th class="py-3 px-3">Tag Kategori</th>
+                <th class="py-3 px-3">Durasi</th>
+                <th class="py-3 px-3">Status</th>
+              </tr>
+            </thead>
+            <tbody id="session-history-tbody" class="divide-y divide-forest-50 text-sm">
+              <!-- Baris riwayat dirender via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-forest-100 py-4 px-4 text-center text-xs text-forest-600 mt-auto">
+    SylvaFocus — Terinspirasi dari mekanisme gamifikasi waktu fokus aplikasi Forest. Tetap fokus, tumbuhkan hutanmu.
+  </footer>
+
+  <!-- ==================== LOGIKA JAVASCRIPT ==================== -->
+  <script>
+    // ==========================================
+    // 1. KONFIGURASI DATA & KATALOG SPESIES POHON
+    // ==========================================
+    const STORAGE_KEY = 'sylvafocus_state_v1';
+    const ACTIVE_KEY = 'sylvafocus_active_v1';
+    const BASE_TITLE = document.title;
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    function saveActive() {
+      try {
+        localStorage.setItem(ACTIVE_KEY, JSON.stringify({
+          endTime: timerState.endTime,
+          durationMinutes: timerState.durationMinutes,
+          tagId: appState.selectedTagId,
+          speciesId: appState.selectedSpecies,
+        }));
+      } catch (e) {}
+    }
+    function clearActive() {
+      try { localStorage.removeItem(ACTIVE_KEY); } catch (e) {}
+    }
+    function graceSeconds() {
+      return parseInt(document.getElementById('deep-focus-grace').value, 10) || 10;
+    }
+    function playChime() {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!audioCtx) audioCtx = new AC();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        [880, 1175].forEach((freq, i) => {
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          const t = audioCtx.currentTime + i * 0.25;
+          o.frequency.value = freq;
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(0.25, t + 0.03);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+          o.connect(g).connect(audioCtx.destination);
+          o.start(t);
+          o.stop(t + 0.55);
+        });
+      } catch (e) {}
+    }
+    function notifyDone(text) {
+      try {
+        if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+          const opts = { body: text, icon: 'icon-192.png', badge: 'favicon-32.png' };
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistration().then((reg) => {
+              if (reg) reg.showNotification('SylvaFocus', opts);
+              else new Notification('SylvaFocus', opts);
+            });
+          } else {
+            new Notification('SylvaFocus', opts);
+          }
+        }
+      } catch (e) {}
+    }
+
+    const TREE_SPECIES = [
+      {
+        id: 'oak',
+        name: 'Pohon Oak',
+        price: 0,
+        desc: 'Klasik, kokoh, dan meneduhkan.',
+        canopyColor: '#3b6448',
+        canopyHighlight: '#6f9c7c',
+        trunkColor: '#6b4e33',
+      },
+      {
+        id: 'pine',
+        name: 'Pohon Pinus',
+        price: 0,
+        desc: 'Runcing dan tahan di segala cuaca.',
+        canopyColor: '#285238',
+        canopyHighlight: '#4e8765',
+        trunkColor: '#5c4028',
+      },
+      {
+        id: 'sakura',
+        name: 'Pohon Sakura',
+        price: 60,
+        desc: 'Mekar merah muda yang menenangkan.',
+        canopyColor: '#e87a90',
+        canopyHighlight: '#f7b2c0',
+        trunkColor: '#5e4336',
+      },
+      {
+        id: 'autumn',
+        name: 'Maple Senja',
+        price: 90,
+        desc: 'Dedaunan jingga hangat penuh inspirasi.',
+        canopyColor: '#d96b27',
+        canopyHighlight: '#f29f4b',
+        trunkColor: '#593c26',
+      },
+      {
+        id: 'cactus',
+        name: 'Kaktus Gurun',
+        price: 120,
+        desc: 'Tangguh bertahan dalam fokus mendalam.',
+        canopyColor: '#488a50',
+        canopyHighlight: '#75b87d',
+        trunkColor: '#3b7342',
+      },
+      {
+        id: 'jacaranda',
+        name: 'Jacaranda Ungu',
+        price: 160,
+        desc: 'Langka dan eksotis untuk fokus tingkat tinggi.',
+        canopyColor: '#7c5295',
+        canopyHighlight: '#a87bc4',
+        trunkColor: '#523b32',
+      },
+      {
+        id: 'ginkgo',
+        name: 'Ginkgo Emas',
+        price: 220,
+        desc: 'Simbol ketekunan dan kebijaksanaan.',
+        canopyColor: '#d4a017',
+        canopyHighlight: '#f0c84b',
+        trunkColor: '#63472d',
+      },
+      {
+        id: 'cypress',
+        name: 'Cemara Perak',
+        price: 280,
+        desc: 'Tinggi menjulang untuk sesi maraton.',
+        canopyColor: '#3c6e71',
+        canopyHighlight: '#6ba2a6',
+        trunkColor: '#4f3a2b',
+      },
+    ];
+
+    const PRESET_TAG_COLORS = [
+      '#3b6448', // Hijau Forest
+      '#2563eb', // Biru
+      '#d97706', // Amber
+      '#9333ea', // Ungu
+      '#e11d48', // Rose
+      '#0d9488', // Teal
+      '#ea580c', // Oranye
+      '#4f46e5', // Indigo
+    ];
+
+    const MOTIVATION_QUOTES = [
+      '"Jangan melihat ponselmu. Biarkan benih ini tumbuh menjadi pohon yang rimbun."',
+      '"Fokus adalah seni mengatakan tidak pada seribu hal yang mengalihkan perhatian."',
+      '"Satu sesi fokus yang selesai adalah satu langkah nyata menuju target besarmu."',
+      '"Hutan yang lebat dimulai dari satu benih yang dijaga dengan sabar."',
+      '"Matikan notifikasi sejenak. Dunia bisa menunggu 25 menit ke depan."',
+    ];
+
+    // ==========================================
+    // 2. STATE APLIKASI & PERSISTENCE
+    // ==========================================
+    let appState = {
+      coins: 85,
+      unlockedSpecies: ['oak', 'pine'],
+      selectedSpecies: 'oak',
+      selectedTagId: 'tag-belajar',
+      tags: [
+        { id: 'tag-belajar', name: 'Belajar', color: '#3b6448' },
+        { id: 'tag-kerja', name: 'Kerja', color: '#2563eb' },
+        { id: 'tag-deepwork', name: 'Deep Work', color: '#9333ea' },
+        { id: 'tag-riset', name: 'Riset & Baca', color: '#d97706' },
+      ],
+      sessions: [],
+    };
+
+    const DEFAULT_STATE = JSON.parse(JSON.stringify(appState));
+
+    // State Timer Runtime
+    let timerState = {
+      isRunning: false,
+      durationMinutes: 25,
+      totalSeconds: 25 * 60,
+      remainingSeconds: 25 * 60,
+      intervalId: null,
+      startTime: null,
+      leaveTimestamp: null,
+    };
+
+    let forestFilter = 'today'; // 'today' | 'all'
+    let tagChartInstance = null;
+    let trendChartInstance = null;
+    let selectedNewTagColor = PRESET_TAG_COLORS[0];
+
+    // Web Audio API State untuk Suara Hujan Ambient
+    let audioCtx = null;
+    let rainNode = null;
+    let isAmbientPlaying = false;
+
+    // Membuat Data Demo Realistis agar Dasbor Terlihat Hidup saat Pertama Dibuka
+    function generateDemoSessions() {
+      const now = new Date();
+      const demo = [];
+      const sampleConfigs = [
+        { daysAgo: 0, hour: 9, min: 15, dur: 45, tag: 'tag-deepwork', species: 'oak', status: 'completed' },
+        { daysAgo: 0, hour: 11, min: 0, dur: 25, tag: 'tag-belajar', species: 'pine', status: 'completed' },
+        { daysAgo: 0, hour: 14, min: 20, dur: 30, tag: 'tag-kerja', species: 'oak', status: 'withered' },
+        { daysAgo: 0, hour: 16, min: 5, dur: 50, tag: 'tag-kerja', species: 'pine', status: 'completed' },
+        { daysAgo: 1, hour: 10, min: 0, dur: 60, tag: 'tag-deepwork', species: 'oak', status: 'completed' },
+        { daysAgo: 1, hour: 15, min: 30, dur: 25, tag: 'tag-riset', species: 'pine', status: 'completed' },
+        { daysAgo: 2, hour: 9, min: 45, dur: 45, tag: 'tag-kerja', species: 'oak', status: 'completed' },
+        { daysAgo: 2, hour: 13, min: 10, dur: 25, tag: 'tag-belajar', species: 'oak', status: 'withered' },
+        { daysAgo: 3, hour: 19, min: 0, dur: 40, tag: 'tag-belajar', species: 'pine', status: 'completed' },
+        { daysAgo: 4, hour: 10, min: 20, dur: 55, tag: 'tag-deepwork', species: 'oak', status: 'completed' },
+        { daysAgo: 5, hour: 14, min: 0, dur: 30, tag: 'tag-riset', species: 'pine', status: 'completed' },
+        { daysAgo: 6, hour: 11, min: 15, dur: 45, tag: 'tag-kerja', species: 'oak', status: 'completed' },
+      ];
+
+      sampleConfigs.forEach((cfg, idx) => {
+        const d = new Date(now);
+        d.setDate(now.getDate() - cfg.daysAgo);
+        d.setHours(cfg.hour, cfg.min, 0, 0);
+        demo.push({
+          id: 'demo-' + idx + '-' + d.getTime(),
+          timestamp: d.toISOString(),
+          durationMinutes: cfg.dur,
+          tagId: cfg.tag,
+          speciesId: cfg.species,
+          status: cfg.status, // 'completed' | 'withered'
+          coinsEarned: cfg.status === 'completed' ? Math.max(5, Math.round(cfg.dur * 0.6)) : 0,
+        });
+      });
+
+      return demo;
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          appState = { ...appState, ...parsed };
+        } else {
+          appState.sessions = [];
+          saveState();
+        }
+      } catch (e) {
+        console.error('Gagal memuat state:', e);
+        appState.sessions = [];
+      }
+    }
+
+    function saveState(fromRemote) {
+      if (fromRemote !== true) appState.updatedAt = Date.now();
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      } catch (e) {
+        console.error('Gagal menyimpan state:', e);
+      }
+      if (fromRemote !== true) scheduleCloudPush();
+    }
+
+    // ==========================================
+    // CLOUD: FIREBASE AUTH + FIRESTORE
+    // ==========================================
+    const UID_KEY = 'sylvafocus_uid_v1';
+    const SYNC_FIELDS = ['coins', 'unlockedSpecies', 'tags', 'sessions'];
+    const cloud = { user: null, unsub: null, timer: null, merged: false, status: 'off', lastSync: null, stateLoaded: false, inited: false };
+
+    function setSyncStatus(st) {
+      cloud.status = st;
+      renderAuthUI();
+    }
+
+    function cloudPayload() {
+      const st = {};
+      SYNC_FIELDS.forEach((k) => (st[k] = appState[k]));
+      return JSON.parse(JSON.stringify(st));
+    }
+
+    function scheduleCloudPush() {
+      if (!cloud.user || !cloud.merged || !window.FB) return;
+      setSyncStatus('pending');
+      clearTimeout(cloud.timer);
+      cloud.timer = setTimeout(pushCloud, 1500);
+    }
+
+    function pushCloud() {
+      if (!cloud.user || !window.FB) return;
+      clearTimeout(cloud.timer);
+      FB.push(cloud.user.uid, { state: cloudPayload(), updatedAt: appState.updatedAt || Date.now() })
+        .then(() => { cloud.lastSync = Date.now(); setSyncStatus('ok'); })
+        .catch((e) => { console.warn('Gagal kirim ke cloud:', e); setSyncStatus('error'); if (e && e.code === 'permission-denied') showToast('Firestore menolak penulisan. Periksa aturan keamanan (firestore.rules).', 'error'); });
+    }
+
+    function mergeById(a, b) {
+      const m = new Map();
+      [...(a || []), ...(b || [])].forEach((x) => { if (x && x.id) m.set(x.id, x); });
+      return [...m.values()];
+    }
+
+    function mergeStates(local, remote) {
+      const localHasData = (local.sessions || []).length > 0;
+      return {
+        sessions: mergeById(remote.sessions, local.sessions),
+        tags: mergeById(remote.tags, local.tags),
+        unlockedSpecies: [...new Set([...(remote.unlockedSpecies || []), ...(local.unlockedSpecies || [])])],
+        coins: localHasData ? Math.max(local.coins || 0, remote.coins || 0) : (remote.coins != null ? remote.coins : local.coins || 0),
+      };
+    }
+
+    function ensureValidSelection() {
+      if (!appState.tags.some((t) => t.id === appState.selectedTagId) && appState.tags[0]) appState.selectedTagId = appState.tags[0].id;
+      if (!appState.unlockedSpecies.includes(appState.selectedSpecies)) appState.selectedSpecies = appState.unlockedSpecies[0] || 'oak';
+    }
+
+    function onCloudSnapshot(snap) {
+      if (snap.metadata.hasPendingWrites) return;
+      const exists = snap.exists();
+      if (!exists && snap.metadata.fromCache) return; // tunggu server, mungkin sedang offline
+      if (!exists) {
+        cloud.merged = true;
+        appState.updatedAt = Date.now();
+        saveState(true);
+        pushCloud();
+        return;
+      }
+      const d = snap.data();
+      const remote = d.state || {};
+      const rts = d.updatedAt || 0;
+      if (!cloud.merged) {
+        // Penggabungan pertama setelah masuk: gabungkan data lokal + cloud lalu kirim hasilnya
+        Object.assign(appState, mergeStates(appState, remote));
+        ensureValidSelection();
+        cloud.merged = true;
+        appState.updatedAt = Date.now();
+        saveState(true);
+        refreshAllViews();
+        pushCloud();
+        return;
+      }
+      if (rts > (appState.updatedAt || 0)) {
+        SYNC_FIELDS.forEach((k) => { if (remote[k] !== undefined) appState[k] = remote[k]; });
+        ensureValidSelection();
+        appState.updatedAt = rts;
+        saveState(true);
+        refreshAllViews();
+      }
+      cloud.lastSync = Date.now();
+      setSyncStatus('ok');
+    }
+
+    function onAuthChange(user) {
+      if (cloud.unsub) { cloud.unsub(); cloud.unsub = null; }
+      clearTimeout(cloud.timer);
+      cloud.merged = false;
+      cloud.user = user ? { uid: user.uid, email: user.email || '', name: user.displayName || '', photo: user.photoURL || '' } : null;
+      if (user) {
+        const last = localStorage.getItem(UID_KEY);
+        if (last && last !== user.uid) {
+          // Akun berbeda di perangkat ini: jangan campur data antar akun
+          Object.assign(appState, JSON.parse(JSON.stringify(DEFAULT_STATE)), { updatedAt: 0 });
+          saveState(true);
+          refreshAllViews();
+        }
+        localStorage.setItem(UID_KEY, user.uid);
+        setSyncStatus('syncing');
+        cloud.unsub = FB.subscribe(user.uid, onCloudSnapshot, (e) => {
+          console.warn('Listener Firestore error:', e);
+          setSyncStatus('error');
+          showToast(e && e.code === 'permission-denied' ? 'Akses Firestore ditolak. Pasang aturan keamanan dari firestore.rules.' : 'Sinkronisasi gagal. Coba lagi nanti.', 'error');
+        });
+      } else {
+        setSyncStatus('off');
+      }
+      renderAuthUI();
+    }
+
+    function initCloud() {
+      if (cloud.inited || !cloud.stateLoaded || !window.FB) return;
+      cloud.inited = true;
+      FB.onAuth(onAuthChange);
+    }
+    window.addEventListener('fb-ready', initCloud);
+    window.addEventListener('fb-error', (e) => showToast(authErrorText(e.detail), 'error'));
+    window.addEventListener('online', () => { if (cloud.user && cloud.merged) pushCloud(); renderAuthUI(); });
+    window.addEventListener('offline', renderAuthUI);
+
+    // ---------- UI akun ----------
+    function authErrorText(code) {
+      const map = {
+        'auth/invalid-credential': 'Email atau kata sandi salah.',
+        'auth/wrong-password': 'Email atau kata sandi salah.',
+        'auth/user-not-found': 'Email atau kata sandi salah.',
+        'auth/invalid-email': 'Format email tidak valid.',
+        'auth/email-already-in-use': 'Email sudah terdaftar. Silakan masuk.',
+        'auth/weak-password': 'Kata sandi terlalu lemah (minimal 6 karakter).',
+        'auth/missing-password': 'Isi kata sandi terlebih dahulu.',
+        'auth/too-many-requests': 'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.',
+        'auth/network-request-failed': 'Koneksi bermasalah. Periksa internetmu.',
+        'auth/popup-closed-by-user': 'Jendela masuk ditutup sebelum selesai.',
+        'auth/cancelled-popup-request': 'Jendela masuk ditutup sebelum selesai.',
+        'auth/unauthorized-domain': 'Domain ini belum diizinkan. Tambahkan di Firebase Console › Authentication › Settings › Authorized domains.',
+        'auth/operation-not-allowed': 'Metode masuk ini belum diaktifkan di Firebase Console › Authentication › Sign-in method.',
+      };
+      return map[code] || 'Terjadi kesalahan (' + (code || 'tidak diketahui') + ').';
+    }
+
+    function openAuthModal() {
+      if (!window.FB) { showToast('Layanan akun belum siap. Periksa koneksi internet lalu muat ulang halaman.', 'warning'); return; }
+      renderAuthUI();
+      const m = document.getElementById('auth-modal');
+      m.classList.remove('hidden'); m.classList.add('flex');
+    }
+    function closeAuthModal() {
+      const m = document.getElementById('auth-modal');
+      m.classList.add('hidden'); m.classList.remove('flex');
+    }
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAuthModal(); });
+
+    function showAuthError(msg) {
+      const el = document.getElementById('auth-error');
+      el.textContent = msg || '';
+      el.classList.toggle('hidden', !msg);
+    }
+    function setAuthBusy(b) {
+      ['auth-google-btn', 'auth-login-btn', 'auth-register-btn'].forEach((id) => { const el = document.getElementById(id); if (el) { el.disabled = b; el.classList.toggle('opacity-60', b); } });
+    }
+
+    async function authGoogle() {
+      showAuthError(''); setAuthBusy(true);
+      try { await FB.google(); closeAuthModal(); showToast('Berhasil masuk.', 'success'); }
+      catch (e) { showAuthError(authErrorText(e.code)); }
+      setAuthBusy(false);
+    }
+    async function authSubmit(mode) {
+      const email = document.getElementById('auth-email').value.trim();
+      const pw = document.getElementById('auth-password').value;
+      if (!email || !pw) { showAuthError('Isi email dan kata sandi.'); return; }
+      showAuthError(''); setAuthBusy(true);
+      try {
+        if (mode === 'register') await FB.register(email, pw); else await FB.login(email, pw);
+        document.getElementById('auth-password').value = '';
+        closeAuthModal();
+        showToast(mode === 'register' ? 'Akun dibuat. Selamat datang!' : 'Berhasil masuk.', 'success');
+      } catch (e) { showAuthError(authErrorText(e.code)); }
+      setAuthBusy(false);
+    }
+    async function authReset() {
+      const email = document.getElementById('auth-email').value.trim();
+      if (!email) { showAuthError('Isi email dulu, lalu tekan "Lupa kata sandi?".'); return; }
+      try { await FB.reset(email); showAuthError(''); showToast('Jika email terdaftar, tautan reset kata sandi telah dikirim.', 'success'); }
+      catch (e) { showAuthError(authErrorText(e.code)); }
+    }
+    async function authLogout() {
+      try { await FB.logout(); closeAuthModal(); showToast('Kamu telah keluar. Data tetap ada di perangkat ini.', 'info'); }
+      catch (e) { showToast(authErrorText(e.code), 'error'); }
+    }
+    function syncNow() {
+      if (!cloud.user) return;
+      if (!cloud.merged) { showToast('Sedang menyinkronkan, tunggu sebentar.', 'info'); return; }
+      setSyncStatus('pending');
+      pushCloud();
+    }
+
+    function syncStatusText() {
+      if (!cloud.user) return '';
+      if (!navigator.onLine) return 'Offline — perubahan dikirim saat online';
+      const t = cloud.lastSync ? new Date(cloud.lastSync).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+      return ({ syncing: 'Menyinkronkan…', pending: 'Menunggu pengiriman…', ok: 'Tersinkron' + (t ? ' • ' + t : ''), error: 'Gagal sinkron — coba “Sinkronkan”' })[cloud.status] || 'Menyinkronkan…';
+    }
+
+    function renderAuthUI() {
+      const btn = document.getElementById('auth-btn');
+      if (!btn) return;
+      const u = cloud.user;
+      const dotColor = !navigator.onLine ? 'bg-slate-400' : ({ ok: 'bg-emerald-500', error: 'bg-rose-500' })[cloud.status] || 'bg-amber-500';
+      const initial = u ? (u.name || u.email || '?').trim().charAt(0).toUpperCase() : '';
+
+      btn.textContent = '';
+      if (!u) {
+        const i = document.createElement('span'); i.textContent = '👤';
+        const t = document.createElement('span'); t.className = 'hidden sm:inline'; t.textContent = 'Masuk';
+        btn.append(i, t);
+      } else {
+        const av = document.createElement('span');
+        av.className = 'w-6 h-6 rounded-full bg-forest-700 text-white flex items-center justify-center text-[11px] font-bold overflow-hidden';
+        if (u.photo) { const im = document.createElement('img'); im.src = u.photo; im.alt = ''; im.referrerPolicy = 'no-referrer'; im.className = 'w-full h-full object-cover'; av.appendChild(im); }
+        else av.textContent = initial;
+        const dot = document.createElement('span');
+        dot.className = 'absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white ' + dotColor;
+        btn.append(av, dot);
+      }
+
+      // Isi modal
+      document.getElementById('auth-out').classList.toggle('hidden', !!u);
+      document.getElementById('auth-in').classList.toggle('hidden', !u);
+      document.getElementById('auth-title').textContent = u ? 'Akunmu' : 'Masuk ke SylvaFocus';
+      document.getElementById('auth-sub').classList.toggle('hidden', !!u);
+      if (u) {
+        document.getElementById('auth-name').textContent = u.name || u.email;
+        document.getElementById('auth-email-label').textContent = u.name ? u.email : '';
+        const av = document.getElementById('auth-avatar'); av.textContent = '';
+        if (u.photo) { const im = document.createElement('img'); im.src = u.photo; im.alt = ''; im.referrerPolicy = 'no-referrer'; im.className = 'w-full h-full object-cover'; av.appendChild(im); }
+        else av.textContent = initial;
+        document.getElementById('auth-status').textContent = syncStatusText();
+        document.getElementById('auth-dot').className = 'w-2.5 h-2.5 rounded-full shrink-0 ' + dotColor;
+      }
+    }
+
+    // ==========================================
+    // 3. RENDER VISUAL TANAMAN SVG DINAMIS
+    // ==========================================
+    /**
+     * Menghasilkan ilustrasi SVG pohon sesuai tahap pertumbuhan (0..1), spesies, dan kondisi layu.
+     */
+    function getTreeSVG(speciesId, progress, isWithered = false, isLarge = true) {
+      const species = TREE_SPECIES.find((s) => s.id === speciesId) || TREE_SPECIES[0];
+      const sizeClass = isLarge ? 'w-44 h-44 sm:w-48 sm:h-48' : 'w-14 h-14';
+      const swayClass = !isWithered && progress > 0.25 && isLarge ? 'animate-sway' : '';
+
+      // Tanah / Pot dasar
+      const groundSVG = `
+        <ellipse cx="100" cy="178" rx="52" ry="11" fill="${isWithered ? '#a8a29e' : '#c5d9ca'}" opacity="0.65" />
+        <ellipse cx="100" cy="176" rx="38" ry="7" fill="${isWithered ? '#78716c' : '#8c6b4a'}" />
+      `;
+
+      // Kondisi Pohon Layu / Mati
+      if (isWithered) {
+        return `
+          <svg viewBox="0 0 200 200" class="${sizeClass}">
+            ${groundSVG}
+            <!-- Batang Kering Patah -->
+            <path d="M96 176 L94 125 L74 102 M95 140 L118 118 M95 125 L102 92"
+              stroke="#6b5e57" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+            <!-- Ranting kecil kering -->
+            <path d="M82 111 L70 116 M108 128 L122 132"
+              stroke="#6b5e57" stroke-width="3.5" stroke-linecap="round" fill="none" />
+            <!-- Daun gugur di tanah -->
+            <ellipse cx="75" cy="175" rx="6" ry="3" fill="#8c7a6b" transform="rotate(-15 75 175)" />
+            <ellipse cx="122" cy="176" rx="5" ry="2.5" fill="#8c7a6b" transform="rotate(20 122 176)" />
+          </svg>
+        `;
+      }
+
+      // Tahap 1: Benih (progress < 0.20)
+      if (progress < 0.20) {
+        return `
+          <svg viewBox="0 0 200 200" class="${sizeClass}">
+            ${groundSVG}
+            <g class="${isLarge ? 'animate-float' : ''}">
+              <path d="M100 173 C91 173 88 162 94 154 C97 150 100 147 100 147 C100 147 103 150 106 154 C112 162 109 173 100 173 Z"
+                fill="#8c5830" />
+              <path d="M100 147 Q105 140 111 143" stroke="#5c9c67" stroke-width="3" stroke-linecap="round" fill="none" />
+            </g>
+          </svg>
+        `;
+      }
+
+      // Tahap 2: Kecambah / Tunas Muda (0.20 <= progress < 0.50)
+      if (progress < 0.50) {
+        return `
+          <svg viewBox="0 0 200 200" class="${sizeClass}">
+            ${groundSVG}
+            <g class="${swayClass}">
+              <path d="M100 176 Q98 152 100 132" stroke="#5c8a58" stroke-width="5" stroke-linecap="round" fill="none" />
+              <!-- Daun Kiri -->
+              <path d="M99 148 C80 146 74 132 84 126 C92 122 98 136 99 148 Z" fill="${species.canopyHighlight}" />
+              <!-- Daun Kanan -->
+              <path d="M100 138 C118 135 125 120 114 115 C106 111 101 126 100 138 Z" fill="${species.canopyColor}" />
+            </g>
+          </svg>
+        `;
+      }
+
+      // Tahap 3: Pohon Muda / Sapling (0.50 <= progress < 0.85)
+      if (progress < 0.85) {
+        if (species.id === 'cactus') {
+          return `
+            <svg viewBox="0 0 200 200" class="${sizeClass}">
+              ${groundSVG}
+              <g class="${swayClass}">
+                <rect x="91" y="105" width="18" height="71" rx="9" fill="${species.canopyColor}" />
+                <path d="M91 140 H78 Q72 140 72 132 V120" stroke="${species.canopyHighlight}" stroke-width="10" stroke-linecap="round" fill="none" />
+              </g>
+            </svg>
+          `;
+        }
+        return `
+          <svg viewBox="0 0 200 200" class="${sizeClass}">
+            ${groundSVG}
+            <g class="${swayClass}">
+              <path d="M96 176 L97 122 L103 122 L104 176 Z" fill="${species.trunkColor}" />
+              <circle cx="100" cy="108" r="32" fill="${species.canopyColor}" />
+              <circle cx="84" cy="116" r="22" fill="${species.canopyHighlight}" opacity="0.9" />
+              <circle cx="116" cy="116" r="22" fill="${species.canopyColor}" />
+            </g>
+          </svg>
+        `;
+      }
+
+      // Tahap 4: Pohon Dewasa Rimbun (progress >= 0.85)
+      if (species.id === 'pine' || species.id === 'cypress') {
+        return `
+          <svg viewBox="0 0 200 200" class="${sizeClass}">
+            ${groundSVG}
+            <g class="${swayClass}">
+              <rect x="93" y="142" width="14" height="34" rx="3" fill="${species.trunkColor}" />
+              <polygon points="100,42 56,112 144,112" fill="${species.canopyColor}" />
+              <polygon points="100,68 48,136 152,136" fill="${species.canopyHighlight}" />
+              <polygon points="100,94 42,154 158,154" fill="${species.canopyColor}" />
+            </g>
+          </svg>
+        `;
+      }
+
+      if (species.id === 'cactus') {
+        return `
+          <svg viewBox="0 0 200 200" class="${sizeClass}">
+            ${groundSVG}
+            <g class="${swayClass}">
+              <rect x="88" y="68" width="24" height="108" rx="12" fill="${species.canopyColor}" />
+              <path d="M88 128 H70 Q62 128 62 118 V96" stroke="${species.canopyHighlight}" stroke-width="13" stroke-linecap="round" fill="none" />
+              <path d="M112 112 H130 Q138 112 138 102 V84" stroke="${species.canopyColor}" stroke-width="13" stroke-linecap="round" fill="none" />
+              <!-- Bunga Mekar di Puncak Kaktus -->
+              <circle cx="100" cy="64" r="8" fill="#f43f5e" />
+              <circle cx="100" cy="64" r="3.5" fill="#fde047" />
+            </g>
+          </svg>
+        `;
+      }
+
+      // Pohon Berkanopi Rimbun (Oak, Sakura, Autumn, Jacaranda, Ginkgo)
+      return `
+        <svg viewBox="0 0 200 200" class="${sizeClass}">
+          ${groundSVG}
+          <g class="${swayClass}">
+            <!-- Batang & Cabang -->
+            <path d="M92 176 L94 114 L106 114 L108 176 Z" fill="${species.trunkColor}" />
+            <path d="M97 132 L76 112 M103 128 L124 108" stroke="${species.trunkColor}" stroke-width="6" stroke-linecap="round" />
+            <!-- Mahkota Daun Bertumpuk -->
+            <circle cx="72" cy="102" r="28" fill="${species.canopyColor}" />
+            <circle cx="128" cy="102" r="28" fill="${species.canopyColor}" />
+            <circle cx="100" cy="76" r="36" fill="${species.canopyHighlight}" />
+            <circle cx="84" cy="92" r="26" fill="${species.canopyColor}" opacity="0.92" />
+            <circle cx="116" cy="90" r="26" fill="${species.canopyHighlight}" opacity="0.92" />
+          </g>
+        </svg>
+      `;
+    }
+
+    // ==========================================
+    // 4. LOGIKA TIMER & DEEP FOCUS
+    // ==========================================
+    const RING_CIRCUMFERENCE = 2 * Math.PI * 116; // ~728.85
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function setDuration(minutes) {
+      if (timerState.isRunning) return;
+      timerState.durationMinutes = minutes;
+      timerState.totalSeconds = minutes * 60;
+      timerState.remainingSeconds = minutes * 60;
+
+      document.getElementById('duration-slider').value = minutes;
+      updateTimerUI();
+      updatePresetButtons(minutes);
+    }
+
+    function updatePresetButtons(activeMinutes) {
+      document.querySelectorAll('.preset-btn').forEach((btn) => {
+        const val = parseInt(btn.textContent);
+        if (val === activeMinutes) {
+          btn.className = 'preset-btn px-3 py-1 rounded-xl text-xs font-semibold bg-forest-600 text-white border border-forest-600 transition';
+        } else {
+          btn.className = 'preset-btn px-3 py-1 rounded-xl text-xs font-semibold bg-forest-50 hover:bg-forest-100 text-forest-700 border border-forest-200 transition';
+        }
+      });
+    }
+
+    function calculateCoinsReward(minutes) {
+      return Math.max(5, Math.round(minutes * 0.6));
+    }
+
+    function updateTimerUI() {
+      document.getElementById('timer-display').textContent = formatTime(timerState.remainingSeconds);
+
+      const elapsed = timerState.totalSeconds - timerState.remainingSeconds;
+      const progress = timerState.isRunning ? elapsed / timerState.totalSeconds : 1; // Saat idle tampilkan pohon dewasa sebagai preview
+      const ringProgress = timerState.isRunning ? elapsed / timerState.totalSeconds : 0;
+
+      const offset = RING_CIRCUMFERENCE * (1 - ringProgress);
+      const ringEl = document.getElementById('progress-ring');
+      ringEl.style.strokeDashoffset = offset;
+
+      // Render pohon sesuai tahap
+      const treeContainer = document.getElementById('tree-stage-container');
+      treeContainer.innerHTML = getTreeSVG(appState.selectedSpecies, progress, false, true);
+
+      // Update Label Tahap
+      const speciesObj = TREE_SPECIES.find((s) => s.id === appState.selectedSpecies) || TREE_SPECIES[0];
+      let stageText = 'Preview Pohon Dewasa';
+      if (timerState.isRunning) {
+        if (progress < 0.20) stageText = 'Tahap 1/4: Benih Ditanam';
+        else if (progress < 0.50) stageText = 'Tahap 2/4: Tunas Muda';
+        else if (progress < 0.85) stageText = 'Tahap 3/4: Pohon Tumbuh';
+        else stageText = 'Tahap 4/4: Hampir Rimbun!';
+      }
+      document.getElementById('growth-stage-label').textContent = `${stageText} • ${speciesObj.name}`;
+
+      // Update Estimasi Koin
+      document.title = timerState.isRunning ? `${formatTime(timerState.remainingSeconds)} • SylvaFocus` : BASE_TITLE;
+
+      const coins = calculateCoinsReward(timerState.durationMinutes);
+      document.getElementById('reward-preview').innerHTML =
+        `Hadiah jika selesai: <strong class="text-amber-700">+${coins} Koin Fokus 🪙</strong>`;
+    }
+
+    function tickTimer() {
+      const rem = Math.max(0, Math.round((timerState.endTime - Date.now()) / 1000));
+      timerState.remainingSeconds = rem;
+      updateTimerUI();
+      if (rem <= 0) completeFocusSession();
+    }
+
+    function startFocusSession(resume) {
+      if (timerState.isRunning) return;
+      if (resume && resume.endTime) {
+        timerState.durationMinutes = resume.durationMinutes;
+        appState.selectedTagId = resume.tagId;
+        appState.selectedSpecies = resume.speciesId;
+        document.getElementById('duration-slider').value = resume.durationMinutes;
+      } else {
+        resume = null;
+        try {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!audioCtx && AC) audioCtx = new AC();
+          if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+          if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+        } catch (e) {}
+      }
+
+      timerState.isRunning = true;
+      timerState.totalSeconds = timerState.durationMinutes * 60;
+      timerState.endTime = resume ? resume.endTime : Date.now() + timerState.totalSeconds * 1000;
+      timerState.remainingSeconds = Math.max(0, Math.round((timerState.endTime - Date.now()) / 1000));
+      timerState.startTime = new Date();
+      saveActive();
+
+      // Update Tampilan UI Aktif
+      document.getElementById('duration-controls').classList.add('opacity-40', 'pointer-events-none');
+      document.getElementById('start-btn').classList.add('hidden');
+      document.getElementById('giveup-btn').classList.remove('hidden');
+      document.getElementById('timer-pulse').classList.remove('hidden');
+
+      const badge = document.getElementById('session-status-badge');
+      badge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800';
+      badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Sedang Fokus Menanam...';
+
+      // Ganti kutipan motivasi
+      const randomQuote = MOTIVATION_QUOTES[Math.floor(Math.random() * MOTIVATION_QUOTES.length)];
+      document.getElementById('motivation-quote').textContent = randomQuote;
+
+      updateTimerUI();
+      showToast(resume ? 'Sesi fokus dilanjutkan.' : 'Benih ditanam! Tetap fokus sampai waktu habis.', 'success');
+
+      timerState.intervalId = setInterval(tickTimer, 1000);
+      tickTimer();
+    }
+
+    function completeFocusSession() {
+      clearInterval(timerState.intervalId);
+      timerState.isRunning = false;
+      clearActive();
+      document.title = BASE_TITLE;
+
+      const earned = calculateCoinsReward(timerState.durationMinutes);
+      appState.coins += earned;
+      playChime();
+      notifyDone('Sesi selesai! Pohonmu tumbuh sempurna 🌳');
+
+      // Catat Sesi Berhasil
+      appState.sessions.unshift({
+        id: 'sess-' + Date.now(),
+        timestamp: new Date().toISOString(),
+        durationMinutes: timerState.durationMinutes,
+        tagId: appState.selectedTagId,
+        speciesId: appState.selectedSpecies,
+        status: 'completed',
+        coinsEarned: earned,
+      });
+
+      saveState();
+      resetTimerControlsUI();
+
+      // Tampilkan pohon dewasa selebrasi
+      document.getElementById('tree-stage-container').innerHTML = getTreeSVG(appState.selectedSpecies, 1, false, true);
+      showToast(`🎉 Selamat! Pohonmu tumbuh sempurna (+${earned} Koin Fokus).`, 'success');
+
+      refreshAllViews();
+    }
+
+    function confirmGiveUp() {
+      if (!timerState.isRunning) return;
+      openConfirmModal(
+        'Menyerah & Batalkan Sesi?',
+        'Jika kamu menyerah sekarang, pohon yang sedang tumbuh akan langsung MATI dan tercatat sebagai pohon layu di hutanmu.',
+        'Ya, Menyerah',
+        () => failFocusSession('Kamu menyerah sebelum waktu fokus selesai.')
+      );
+    }
+
+    function failFocusSession(reasonText) {
+      clearInterval(timerState.intervalId);
+      timerState.isRunning = false;
+      clearActive();
+      document.title = BASE_TITLE;
+
+      // Catat Sesi Layu
+      appState.sessions.unshift({
+        id: 'sess-' + Date.now(),
+        timestamp: new Date().toISOString(),
+        durationMinutes: timerState.durationMinutes,
+        tagId: appState.selectedTagId,
+        speciesId: appState.selectedSpecies,
+        status: 'withered',
+        coinsEarned: 0,
+      });
+
+      saveState();
+      resetTimerControlsUI();
+
+      // Tampilkan Visual Pohon Layu
+      document.getElementById('tree-stage-container').innerHTML = getTreeSVG(appState.selectedSpecies, 0.5, true, true);
+      document.getElementById('growth-stage-label').textContent = '🥀 Pohon Layu & Mati';
+
+      const badge = document.getElementById('session-status-badge');
+      badge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800';
+      badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span> Sesi Gagal';
+
+      showToast(`🥀 Pohonmu mati! ${reasonText}`, 'error');
+      refreshAllViews();
+    }
+
+    function resetTimerControlsUI() {
+      timerState.remainingSeconds = timerState.durationMinutes * 60;
+      document.getElementById('timer-display').textContent = formatTime(timerState.remainingSeconds);
+      document.getElementById('progress-ring').style.strokeDashoffset = 0;
+
+      document.getElementById('duration-controls').classList.remove('opacity-40', 'pointer-events-none');
+      document.getElementById('start-btn').classList.remove('hidden');
+      document.getElementById('giveup-btn').classList.add('hidden');
+      document.getElementById('timer-pulse').classList.add('hidden');
+      document.getElementById('deep-focus-banner').classList.add('hidden');
+
+      const badge = document.getElementById('session-status-badge');
+      badge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-forest-100 text-forest-800';
+      badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-forest-500"></span> Siap Menanam';
+    }
+
+    // Deteksi Perpindahan Tab untuk Mode Deep Focus (Page Visibility API)
+    document.addEventListener('visibilitychange', () => {
+      const isDeepFocus = document.getElementById('deep-focus-toggle').checked;
+      if (!timerState.isRunning || !isDeepFocus) return;
+
+      if (document.hidden) {
+        timerState.leaveTimestamp = Date.now();
+        document.getElementById('deep-focus-banner').classList.remove('hidden');
+      } else if (timerState.leaveTimestamp) {
+        const awaySeconds = (Date.now() - timerState.leaveTimestamp) / 1000;
+        timerState.leaveTimestamp = null;
+
+        // Jika meninggalkan tab lebih dari 10 detik saat Deep Focus aktif, pohon mati
+        if (awaySeconds > graceSeconds()) {
+          failFocusSession(`Kamu meninggalkan aplikasi selama ${Math.round(awaySeconds)} detik saat Deep Focus aktif.`);
+        } else {
+          showToast(`⚠️ Hampir saja! Batas toleransi ${graceSeconds()} detik saat Deep Focus aktif.`, 'warning');
+          setTimeout(() => {
+            document.getElementById('deep-focus-banner').classList.add('hidden');
+          }, 4000);
+        }
+      }
+    });
+
+    // ==========================================
+    // 5. TAG KATEGORI & SPESIES POHON
+    // ==========================================
+    function renderTagSelector() {
+      const container = document.getElementById('tag-selector-grid');
+      container.innerHTML = '';
+
+      appState.tags.forEach((tag) => {
+        const isSelected = tag.id === appState.selectedTagId;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.onclick = () => {
+          if (timerState.isRunning) {
+            showToast('Tidak dapat mengganti tag saat sesi sedang berjalan.', 'warning');
+            return;
+          }
+          appState.selectedTagId = tag.id;
+          saveState();
+          renderTagSelector();
+        };
+
+        btn.className = `px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 border transition ${
+          isSelected
+            ? 'bg-forest-800 text-white border-forest-800 shadow-sm'
+            : 'bg-white hover:bg-forest-50 text-forest-800 border-forest-200'
+        }`;
+
+        btn.innerHTML = `
+          <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${tag.color}"></span>
+          <span>${escapeHtml(tag.name)}</span>
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    function openTagModal() {
+      if (timerState.isRunning) {
+        showToast('Selesaikan sesi fokus terlebih dahulu.', 'warning');
+        return;
+      }
+      document.getElementById('new-tag-name').value = '';
+      selectedNewTagColor = PRESET_TAG_COLORS[0];
+      renderTagColorPicker();
+      const modal = document.getElementById('tag-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeTagModal() {
+      const modal = document.getElementById('tag-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function renderTagColorPicker() {
+      const picker = document.getElementById('tag-color-picker');
+      picker.innerHTML = '';
+      PRESET_TAG_COLORS.forEach((color) => {
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.onclick = () => {
+          selectedNewTagColor = color;
+          renderTagColorPicker();
+        };
+        swatch.className = `w-7 h-7 rounded-full transition transform ${
+          selectedNewTagColor === color ? 'ring-2 ring-offset-2 ring-forest-700 scale-110' : 'hover:scale-105'
+        }`;
+        swatch.style.backgroundColor = color;
+        picker.appendChild(swatch);
+      });
+    }
+
+    function saveNewTag() {
+      const nameInput = document.getElementById('new-tag-name').value.trim();
+      if (!nameInput) {
+        showToast('Nama tag tidak boleh kosong.', 'warning');
+        return;
+      }
+      const newTag = {
+        id: 'tag-' + Date.now(),
+        name: nameInput,
+        color: selectedNewTagColor,
+      };
+      appState.tags.push(newTag);
+      appState.selectedTagId = newTag.id;
+      saveState();
+      closeTagModal();
+      renderTagSelector();
+      showToast(`Tag "${nameInput}" berhasil ditambahkan!`, 'success');
+    }
+
+    function renderQuickSpeciesSelector() {
+      const container = document.getElementById('quick-species-grid');
+      container.innerHTML = '';
+
+      // Tampilkan spesies yang sudah terbuka
+      const unlockedList = TREE_SPECIES.filter((s) => appState.unlockedSpecies.includes(s.id));
+
+      unlockedList.forEach((sp) => {
+        const isSelected = sp.id === appState.selectedSpecies;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.onclick = () => {
+          if (timerState.isRunning) {
+            showToast('Tidak dapat mengganti bibit saat sesi berjalan.', 'warning');
+            return;
+          }
+          appState.selectedSpecies = sp.id;
+          saveState();
+          renderQuickSpeciesSelector();
+          updateTimerUI();
+        };
+
+        btn.className = `p-2.5 rounded-2xl border text-left flex items-center gap-2.5 transition ${
+          isSelected
+            ? 'bg-forest-50 border-forest-600 ring-1 ring-forest-600'
+            : 'bg-white hover:bg-forest-50/60 border-forest-100'
+        }`;
+
+        btn.innerHTML = `
+          <div class="w-10 h-10 rounded-xl bg-forest-50 flex items-center justify-center shrink-0">
+            ${getTreeSVG(sp.id, 1, false, false)}
+          </div>
+          <div class="min-w-0">
+            <div class="text-xs font-bold text-forest-900 truncate">${sp.name}</div>
+            <div class="text-[10px] text-forest-600">${isSelected ? 'Terpilih ✓' : 'Siap tanam'}</div>
+          </div>
+        `;
+        container.appendChild(btn);
+      });
+    }
+
+    // ==========================================
+    // 6. HUTAN VIRTUAL & TOKO SPESIES
+    // ==========================================
+    function setForestFilter(filter) {
+      forestFilter = filter;
+      const btnToday = document.getElementById('forest-filter-today');
+      const btnAll = document.getElementById('forest-filter-all');
+
+      if (filter === 'today') {
+        btnToday.className = 'px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-forest-800 shadow-sm transition';
+        btnAll.className = 'px-3.5 py-1.5 rounded-xl text-xs font-semibold text-forest-600 hover:text-forest-900 transition';
+      } else {
+        btnAll.className = 'px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-forest-800 shadow-sm transition';
+        btnToday.className = 'px-3.5 py-1.5 rounded-xl text-xs font-semibold text-forest-600 hover:text-forest-900 transition';
+      }
+
+      renderVirtualForest();
+    }
+
+    function isSameDay(d1, d2) {
+      return (
+        d1.getFullYear() === d2.getFullYear() &&
+        d1.getMonth() === d2.getMonth() &&
+        d1.getDate() === d2.getDate()
+      );
+    }
+
+    function renderVirtualForest() {
+      const grid = document.getElementById('virtual-forest-grid');
+      const today = new Date();
+
+      const filtered = appState.sessions.filter((s) => {
+        if (forestFilter === 'all') return true;
+        return isSameDay(new Date(s.timestamp), today);
+      });
+
+      document.getElementById('forest-count-summary').textContent =
+        `Menampilkan ${filtered.length} Pohon (${forestFilter === 'today' ? 'Hari Ini' : 'Semua Waktu'})`;
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full py-12 text-center">
+            <div class="text-4xl mb-2">🌱</div>
+            <p class="text-sm font-semibold text-forest-800">Belum ada pohon di lahan ini</p>
+            <p class="text-xs text-forest-600 mt-1">Mulai sesi fokus pertamamu untuk menumbuhkan pohon!</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = '';
+      filtered.forEach((sess) => {
+        const isWithered = sess.status === 'withered';
+        const tag = appState.tags.find((t) => t.id === sess.tagId) || { name: 'Umum', color: '#4e7f5d' };
+        const species = TREE_SPECIES.find((sp) => sp.id === sess.speciesId) || TREE_SPECIES[0];
+        const dateObj = new Date(sess.timestamp);
+        const timeStr = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        const dateStr = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+
+        const card = document.createElement('div');
+        card.className = `rounded-2xl p-2.5 flex flex-col items-center text-center border transition hover:-translate-y-1 ${
+          isWithered
+            ? 'bg-stone-100/90 border-stone-200/80 opacity-85'
+            : 'bg-white/90 border-forest-200/80 shadow-sm'
+        }`;
+
+        card.innerHTML = `
+          <div class="my-1">
+            ${getTreeSVG(sess.speciesId, 1, isWithered, false)}
+          </div>
+          <span class="text-[11px] font-bold text-forest-900 truncate w-full">${species.name}</span>
+          <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white mt-1 truncate max-w-full" style="background-color: ${isWithered ? '#78716c' : tag.color}">
+            ${escapeHtml(tag.name)} • ${sess.durationMinutes}m
+          </span>
+          <span class="text-[10px] text-forest-500 mt-1">${dateStr}, ${timeStr}</span>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function renderSpeciesShop() {
+      const grid = document.getElementById('species-shop-grid');
+      document.getElementById('shop-coins').textContent = appState.coins;
+      grid.innerHTML = '';
+
+      TREE_SPECIES.forEach((sp) => {
+        const isUnlocked = appState.unlockedSpecies.includes(sp.id);
+        const isSelected = appState.selectedSpecies === sp.id;
+
+        const card = document.createElement('div');
+        card.className = `rounded-2xl p-4 border flex flex-col justify-between transition ${
+          isSelected
+            ? 'bg-forest-50 border-forest-500 ring-1 ring-forest-500'
+            : 'bg-earth-50/60 border-forest-100'
+        }`;
+
+        let actionHTML = '';
+        if (isUnlocked) {
+          actionHTML = isSelected
+            ? `<button disabled class="w-full py-2 rounded-xl text-xs font-bold bg-forest-600 text-white cursor-default">Sedang Dipakai ✓</button>`
+            : `<button onclick="selectSpeciesFromShop('${sp.id}')" class="w-full py-2 rounded-xl text-xs font-bold bg-white hover:bg-forest-100 text-forest-800 border border-forest-200 transition">Pilih Bibit</button>`;
+        } else {
+          const canAfford = appState.coins >= sp.price;
+          actionHTML = `
+            <button onclick="buySpecies('${sp.id}')"
+              class="w-full py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                canAfford
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm'
+                  : 'bg-stone-200 text-stone-500 cursor-not-allowed'
+              }">
+              <span>🪙</span>
+              <span>Buka (${sp.price} Koin)</span>
+            </button>
+          `;
+        }
+
+        card.innerHTML = `
+          <div>
+            <div class="w-full h-24 rounded-xl bg-white border border-forest-100 flex items-center justify-center mb-3">
+              <div class="scale-125">${getTreeSVG(sp.id, 1, false, false)}</div>
+            </div>
+            <div class="flex items-center justify-between gap-1">
+              <h4 class="font-display font-bold text-sm text-forest-900">${sp.name}</h4>
+              ${isUnlocked ? '<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">Dimiliki</span>' : ''}
+            </div>
+            <p class="text-xs text-forest-600 mt-1 mb-4">${sp.desc}</p>
+          </div>
+          ${actionHTML}
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function selectSpeciesFromShop(speciesId) {
+      if (timerState.isRunning) {
+        showToast('Selesaikan sesi berjalan sebelum mengganti bibit.', 'warning');
+        return;
+      }
+      appState.selectedSpecies = speciesId;
+      saveState();
+      refreshAllViews();
+      showToast('Bibit pohon berhasil dipilih!', 'success');
+    }
+
+    function buySpecies(speciesId) {
+      const species = TREE_SPECIES.find((s) => s.id === speciesId);
+      if (!species) return;
+      if (appState.unlockedSpecies.includes(speciesId)) return;
+
+      if (appState.coins < species.price) {
+        showToast(`Koin belum cukup! Butuh ${species.price} koin untuk membuka ${species.name}.`, 'warning');
+        return;
+      }
+
+      appState.coins -= species.price;
+      appState.unlockedSpecies.push(speciesId);
+      appState.selectedSpecies = speciesId;
+      saveState();
+      refreshAllViews();
+      showToast(`🎉 Berhasil membuka ${species.name}!`, 'success');
+    }
+
+    // ==========================================
+    // 7. DASBOR ANALITIK & GRAFIK (CHART.JS)
+    // ==========================================
+    function renderDashboard() {
+      const completedSessions = appState.sessions.filter((s) => s.status === 'completed');
+      const witheredSessions = appState.sessions.filter((s) => s.status === 'withered');
+
+      const totalMinutes = completedSessions.reduce((acc, s) => acc + s.durationMinutes, 0);
+      const totalHours = (totalMinutes / 60).toFixed(1);
+      const totalAll = appState.sessions.length;
+      const successRate = totalAll > 0 ? Math.round((completedSessions.length / totalAll) * 100) : 100;
+
+      // Update KPI Cards
+      document.getElementById('kpi-total-time').textContent = `${totalHours} Jam`;
+      document.getElementById('kpi-total-minutes-sub').textContent = `${totalMinutes} menit fokus berhasil`;
+      document.getElementById('kpi-healthy-trees').textContent = completedSessions.length;
+      document.getElementById('kpi-success-rate').textContent = `Tingkat keberhasilan ${successRate}%`;
+      document.getElementById('kpi-withered-trees').textContent = witheredSessions.length;
+      document.getElementById('kpi-coins').textContent = appState.coins;
+
+      renderTagDistributionChart(completedSessions, totalMinutes);
+      renderDailyTrendChart(completedSessions);
+      renderSessionHistoryTable();
+    }
+
+    function renderTagDistributionChart(completedSessions, totalMinutes) {
+      const tagTotals = {};
+      completedSessions.forEach((s) => {
+        tagTotals[s.tagId] = (tagTotals[s.tagId] || 0) + s.durationMinutes;
+      });
+
+      const labels = [];
+      const dataValues = [];
+      const bgColors = [];
+      const breakdownHTML = [];
+
+      appState.tags.forEach((tag) => {
+        const mins = tagTotals[tag.id] || 0;
+        if (mins > 0) {
+          labels.push(tag.name);
+          dataValues.push(mins);
+          bgColors.push(tag.color);
+          const pct = totalMinutes > 0 ? Math.round((mins / totalMinutes) * 100) : 0;
+          breakdownHTML.push(`
+            <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${tag.color}"></span>
+                <span class="font-semibold text-forest-800">${escapeHtml(tag.name)}</span>
+              </div>
+              <span class="text-forest-600 font-medium">${mins} mnt (${pct}%)</span>
+            </div>
+          `);
+        }
+      });
+
+      document.getElementById('tag-breakdown-list').innerHTML =
+        breakdownHTML.length > 0
+          ? breakdownHTML.join('')
+          : '<p class="text-xs text-forest-500 text-center py-2">Belum ada data sesi berhasil.</p>';
+
+      const ctx = document.getElementById('tagChart').getContext('2d');
+      if (tagChartInstance) tagChartInstance.destroy();
+
+      tagChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels.length ? labels : ['Belum Ada Data'],
+          datasets: [
+            {
+              data: dataValues.length ? dataValues : [1],
+              backgroundColor: bgColors.length ? bgColors : ['#e2ece4'],
+              borderWidth: 2,
+              borderColor: '#ffffff',
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '66%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  if (!dataValues.length) return ' Belum ada sesi';
+                  return ` ${context.label}: ${context.raw} menit`;
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    function renderDailyTrendChart(completedSessions) {
+      const daysLabels = [];
+      const dailyMinutes = [];
+      const today = new Date();
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const label = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' });
+        daysLabels.push(label);
+
+        const sumMins = completedSessions
+          .filter((s) => isSameDay(new Date(s.timestamp), d))
+          .reduce((acc, s) => acc + s.durationMinutes, 0);
+        dailyMinutes.push(sumMins);
+      }
+
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      if (trendChartInstance) trendChartInstance.destroy();
+
+      trendChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: daysLabels,
+          datasets: [
+            {
+              label: 'Menit Fokus',
+              data: dailyMinutes,
+              backgroundColor: '#4e7f5d',
+              hoverBackgroundColor: '#3b6448',
+              borderRadius: 10,
+              maxBarThickness: 38,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: '#f3f7f4' },
+              ticks: { font: { size: 11 }, color: '#4e7f5d' },
+            },
+            x: {
+              grid: { display: false },
+              ticks: { font: { size: 11 }, color: '#30503b' },
+            },
+          },
+        },
+      });
+    }
+
+    function renderSessionHistoryTable() {
+      const tbody = document.getElementById('session-history-tbody');
+      document.getElementById('history-count-badge').textContent = `${appState.sessions.length} Sesi`;
+
+      if (appState.sessions.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="py-8 text-center text-xs text-forest-500">
+              Belum ada riwayat sesi fokus tercatat.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = appState.sessions
+        .slice(0, 25)
+        .map((sess) => {
+          const d = new Date(sess.timestamp);
+          const dateStr = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+          const timeStr = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+          const tag = appState.tags.find((t) => t.id === sess.tagId) || { name: 'Umum', color: '#4e7f5d' };
+          const species = TREE_SPECIES.find((sp) => sp.id === sess.speciesId) || TREE_SPECIES[0];
+          const isCompleted = sess.status === 'completed';
+
+          return `
+            <tr class="hover:bg-forest-50/50 transition">
+              <td class="py-3 px-3 text-xs text-forest-700 whitespace-nowrap">${dateStr} • ${timeStr}</td>
+              <td class="py-3 px-3 text-xs font-semibold text-forest-900 whitespace-nowrap">${species.name}</td>
+              <td class="py-3 px-3 whitespace-nowrap">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-white" style="background-color: ${tag.color}">
+                  ${escapeHtml(tag.name)}
+                </span>
+              </td>
+              <td class="py-3 px-3 text-xs font-bold text-forest-800 whitespace-nowrap">${sess.durationMinutes} mnt</td>
+              <td class="py-3 px-3 whitespace-nowrap">
+                ${
+                  isCompleted
+                    ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">🌲 Berhasil (+${sess.coinsEarned}🪙)</span>`
+                    : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800">🥀 Layu</span>`
+                }
+              </td>
+            </tr>
+          `;
+        })
+        .join('');
+    }
+
+    // ==========================================
+    // 8. SUARA LATAR HUJAN SINTETIS (WEB AUDIO API)
+    // ==========================================
+    function toggleAmbientSound() {
+      const btnIcon = document.getElementById('ambient-icon');
+      const btnLabel = document.getElementById('ambient-label');
+      const btn = document.getElementById('ambient-btn');
+
+      if (isAmbientPlaying) {
+        if (rainNode) {
+          rainNode.disconnect();
+          rainNode = null;
+        }
+        isAmbientPlaying = false;
+        btnIcon.textContent = '🔇';
+        btnLabel.textContent = 'Suara Hujan';
+        btn.classList.remove('bg-forest-600', 'text-white', 'border-forest-600');
+        btn.classList.add('bg-forest-50', 'text-forest-700', 'border-forest-200');
+        return;
+      }
+
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!audioCtx) audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        // Buat buffer white/pink noise lembut menyerupai hujan rintik
+        const bufferSize = 2 * audioCtx.sampleRate;
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99886 * b0 + white * 0.0555179;
+          b1 = 0.99332 * b1 + white * 0.0750759;
+          b2 = 0.96900 * b2 + white * 0.1538520;
+          b3 = 0.86650 * b3 + white * 0.3104856;
+          b4 = 0.55000 * b4 + white * 0.5329522;
+          b5 = -0.7616 * b5 - white * 0.0168980;
+          output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+          output[i] *= 0.025; // Volume lembut
+          b6 = white * 0.115926;
+        }
+
+        const whiteNoise = audioCtx.createBufferSource();
+        whiteNoise.buffer = noiseBuffer;
+        whiteNoise.loop = true;
+
+        // Lowpass filter agar suara hujan terdengar hangat dan tidak menusuk
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 950;
+
+        whiteNoise.connect(filter);
+        filter.connect(audioCtx.destination);
+        whiteNoise.start(0);
+
+        rainNode = filter;
+        isAmbientPlaying = true;
+        btnIcon.textContent = '🌧️';
+        btnLabel.textContent = 'Hujan Aktif';
+        btn.classList.remove('bg-forest-50', 'text-forest-700', 'border-forest-200');
+        btn.classList.add('bg-forest-600', 'text-white', 'border-forest-600');
+        showToast('🌧️ Suara hujan rintik diaktifkan.', 'success');
+      } catch (err) {
+        showToast('Browser tidak mendukung audio sintetis.', 'warning');
+      }
+    }
+
+    // ==========================================
+    // 9. NAVIGASI TAB, MODAL & UTILITAS UI
+    // ==========================================
+    function switchTab(tabName) {
+      const views = ['focus', 'forest', 'dashboard'];
+      views.forEach((v) => {
+        const el = document.getElementById('view-' + v);
+        const navBtn = document.getElementById('nav-' + v);
+        if (v === tabName) {
+          el.classList.remove('hidden');
+          navBtn.className =
+            'nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 bg-white text-forest-800 shadow-sm';
+        } else {
+          el.classList.add('hidden');
+          navBtn.className =
+            'nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-forest-600 hover:text-forest-900';
+        }
+      });
+
+      if (tabName === 'forest') {
+        renderVirtualForest();
+        renderSpeciesShop();
+      } else if (tabName === 'dashboard') {
+        renderDashboard();
+      }
+    }
+
+    function refreshAllViews() {
+      // Update Header Coins
+      document.getElementById('header-coins').textContent = appState.coins;
+
+      // Update Ringkasan Hari Ini di Halaman Fokus
+      const today = new Date();
+      const todaySessions = appState.sessions.filter((s) => isSameDay(new Date(s.timestamp), today));
+      const todayCompleted = todaySessions.filter((s) => s.status === 'completed');
+      const todayWithered = todaySessions.filter((s) => s.status === 'withered');
+      const todayMins = todayCompleted.reduce((acc, s) => acc + s.durationMinutes, 0);
+
+      document.getElementById('quick-today-minutes').textContent = `${todayMins}m`;
+      document.getElementById('quick-today-trees').textContent = todayCompleted.length;
+      document.getElementById('quick-today-withered').textContent = todayWithered.length;
+
+      renderTagSelector();
+      renderQuickSpeciesSelector();
+      updateTimerUI();
+      renderVirtualForest();
+      renderSpeciesShop();
+      renderDashboard();
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+
+      const styles = {
+        success: 'bg-forest-800 text-white border-forest-700',
+        warning: 'bg-amber-600 text-white border-amber-500',
+        error: 'bg-rose-600 text-white border-rose-500',
+        info: 'bg-white text-forest-900 border-forest-200',
+      };
+
+      toast.className = `pointer-events-auto px-4 py-3 rounded-2xl shadow-lg border text-xs sm:text-sm font-medium transition-all duration-300 transform translate-y-0 ${
+        styles[type] || styles.info
+      }`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', '-translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3600);
+    }
+
+    function openConfirmModal(title, message, confirmText, onConfirm) {
+      const modal = document.getElementById('custom-modal');
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-message').textContent = message;
+      const confirmBtn = document.getElementById('modal-confirm-btn');
+      confirmBtn.textContent = confirmText;
+
+      const closeModal = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      };
+
+      document.getElementById('modal-cancel-btn').onclick = closeModal;
+      confirmBtn.onclick = () => {
+        closeModal();
+        onConfirm();
+      };
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function confirmResetDemo() {
+      openConfirmModal(
+        'Muat Ulang Data Demo?',
+        'Riwayat sesi saat ini akan diganti dengan contoh data simulasi 7 hari terakhir.',
+        'Muat Ulang Demo',
+        () => {
+          appState.sessions = generateDemoSessions();
+          appState.coins = 85;
+          saveState();
+          refreshAllViews();
+          showToast('Data demo berhasil dimuat ulang.', 'success');
+        }
+      );
+    }
+
+    function confirmClearAllData() {
+      openConfirmModal(
+        'Hapus Semua Riwayat?',
+        'Seluruh pohon di hutan virtual dan riwayat sesi fokusmu akan dihapus permanen menjadi 0.' + (cloud.user ? ' Data di akun cloud-mu juga ikut terhapus.' : ''),
+        'Hapus Semua',
+        () => {
+          appState.sessions = [];
+          appState.coins = 0;
+          saveState();
+          refreshAllViews();
+          showToast('Seluruh data sesi telah dibersihkan.', 'info');
+        }
+      );
+    }
+
+    // Event Listener Slider Durasi
+    document.getElementById('duration-slider').addEventListener('input', (e) => {
+      setDuration(parseInt(e.target.value, 10));
+    });
+
+    // Inisialisasi Aplikasi saat Halaman Dimuat
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      const todayStr = new Date().toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'short',
+      });
+      document.getElementById('today-date-label').textContent = todayStr;
+      // Pengaturan Deep Focus (di HP, default nonaktif karena kunci layar dianggap meninggalkan halaman)
+      const st = appState.settings || {};
+      const dfToggle = document.getElementById('deep-focus-toggle');
+      const dfGrace = document.getElementById('deep-focus-grace');
+      const isMobile = window.matchMedia('(pointer: coarse)').matches;
+      dfToggle.checked = typeof st.deepFocus === 'boolean' ? st.deepFocus : !isMobile;
+      if (st.grace) dfGrace.value = String(st.grace);
+      const saveSettings = () => {
+        appState.settings = { deepFocus: dfToggle.checked, grace: graceSeconds() };
+        saveState();
+      };
+      dfToggle.addEventListener('change', saveSettings);
+      dfGrace.addEventListener('change', saveSettings);
+
+      refreshAllViews();
+
+      // Pulihkan sesi yang sedang berjalan setelah refresh/tutup halaman
+      try {
+        const raw = localStorage.getItem(ACTIVE_KEY);
+        if (raw) startFocusSession(JSON.parse(raw));
+      } catch (e) { clearActive(); }
+
+      cloud.stateLoaded = true;
+      initCloud();
+      renderAuthUI();
+    });
+
+    // Registrasi Service Worker (hanya jalan di http/https, bukan file://)
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW gagal didaftarkan:', e));
+      });
+    }
+
+    window.addEventListener('beforeunload', (e) => {
+      if (timerState.isRunning) { e.preventDefault(); e.returnValue = ''; }
+    });
+  </script>
+
+  <!-- Firebase: Analytics + Auth + Firestore -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-analytics.js";
+    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
+      signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
+    import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, onSnapshot }
+      from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCcFoyQAHeyHrnWBmlTlFbnqFGWx3rpLMM",
+      authDomain: "podomoro-75742.firebaseapp.com",
+      projectId: "podomoro-75742",
+      storageBucket: "podomoro-75742.firebasestorage.app",
+      messagingSenderId: "997389292226",
+      appId: "1:997389292226:web:b351ca50675d6b81c6215b",
+      measurementId: "G-79H9GFHN6T"
+    };
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      try { window.firebaseAnalytics = getAnalytics(app); } catch (e) { console.warn('Analytics tidak aktif:', e); }
+
+      const auth = getAuth(app);
+      auth.languageCode = 'id';
+
+      let db;
+      try {
+        db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+      } catch (e) {
+        db = getFirestore(app);
+      }
+      const userDoc = (uid) => doc(db, 'users', uid);
+
+      window.firebaseApp = app;
+      window.FB = {
+        onAuth: (cb) => onAuthStateChanged(auth, cb),
+        google: async () => {
+          const provider = new GoogleAuthProvider();
+          try { return await signInWithPopup(auth, provider); }
+          catch (e) {
+            if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') return signInWithRedirect(auth, provider);
+            throw e;
+          }
+        },
+        login: (email, pw) => signInWithEmailAndPassword(auth, email, pw),
+        register: (email, pw) => createUserWithEmailAndPassword(auth, email, pw),
+        reset: (email) => sendPasswordResetEmail(auth, email),
+        logout: () => signOut(auth),
+        subscribe: (uid, onData, onErr) => onSnapshot(userDoc(uid), onData, onErr),
+        push: (uid, data) => setDoc(userDoc(uid), data),
+      };
+      getRedirectResult(auth).catch((e) => window.dispatchEvent(new CustomEvent('fb-error', { detail: e.code })));
+      window.dispatchEvent(new Event('fb-ready'));
+    } catch (e) {
+      console.warn('Firebase tidak aktif:', e);
+    }
+  </script>
+</body>
+</html>
