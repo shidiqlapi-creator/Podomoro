@@ -60,6 +60,7 @@
   </script>
 
   <style>
+    html, body { max-width: 100%; overflow-x: clip; }
     /* Animasi Halus untuk Tanaman & UI */
     @keyframes sway {
       0%, 100% { transform: rotate(-1.8deg); }
@@ -237,9 +238,9 @@
 
   <!-- Header & Navigasi Utama -->
   <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-forest-100">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-16 py-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
       <!-- Logo -->
-      <div class="flex items-center gap-2.5">
+      <div class="flex items-center gap-2.5 min-w-0">
         <img src="icon-192.png" alt="Logo SylvaFocus" class="w-10 h-10 rounded-2xl shadow-sm" width="40" height="40" />
         <div>
           <h1 class="font-display font-extrabold text-lg sm:text-xl tracking-tight text-forest-900 leading-none">
@@ -250,26 +251,26 @@
       </div>
 
       <!-- Navigasi Tab Mobile & Desktop -->
-      <nav class="flex items-center bg-forest-50 p-1 rounded-2xl border border-forest-100">
+      <nav class="flex items-center order-last w-full sm:order-none sm:w-auto bg-forest-50 p-1 rounded-2xl border border-forest-100">
         <button onclick="switchTab('focus')" id="nav-focus"
-          class="nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 bg-white text-forest-800 shadow-sm">
+          class="nav-btn flex-1 sm:flex-none justify-center whitespace-nowrap px-2 sm:px-4 py-2 sm:py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 bg-white text-forest-800 shadow-sm">
           <span>🌱</span>
           <span>Fokus</span>
         </button>
         <button onclick="switchTab('forest')" id="nav-forest"
-          class="nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-forest-600 hover:text-forest-900">
+          class="nav-btn flex-1 sm:flex-none justify-center whitespace-nowrap px-2 sm:px-4 py-2 sm:py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-forest-600 hover:text-forest-900">
           <span>🌲</span>
           <span>Hutan & Toko</span>
         </button>
         <button onclick="switchTab('dashboard')" id="nav-dashboard"
-          class="nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-forest-600 hover:text-forest-900">
+          class="nav-btn flex-1 sm:flex-none justify-center whitespace-nowrap px-2 sm:px-4 py-2 sm:py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-forest-600 hover:text-forest-900">
           <span>📊</span>
           <span>Dasbor</span>
         </button>
       </nav>
 
       <!-- Saldo Koin & Audio Ambient -->
-      <div class="flex items-center gap-2 sm:gap-3">
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
         <!-- Toggle Suara Hujan Ambient -->
         <button id="ambient-btn" onclick="toggleAmbientSound()" title="Suara Latar Hujan Rintik"
           class="p-2 sm:px-3 sm:py-1.5 rounded-xl border border-forest-200 bg-forest-50 hover:bg-forest-100 text-forest-700 text-xs font-semibold flex items-center gap-1.5 transition">
@@ -2112,11 +2113,11 @@
         if (v === tabName) {
           el.classList.remove('hidden');
           navBtn.className =
-            'nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 bg-white text-forest-800 shadow-sm';
+            'nav-btn flex-1 sm:flex-none justify-center whitespace-nowrap px-2 sm:px-4 py-2 sm:py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 bg-white text-forest-800 shadow-sm';
         } else {
           el.classList.add('hidden');
           navBtn.className =
-            'nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-forest-600 hover:text-forest-900';
+            'nav-btn flex-1 sm:flex-none justify-center whitespace-nowrap px-2 sm:px-4 py-2 sm:py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 text-forest-600 hover:text-forest-900';
         }
       });
 
