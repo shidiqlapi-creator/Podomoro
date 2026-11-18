@@ -329,6 +329,13 @@
             <option value="60">Toleransi 1 mnt</option>
             <option value="120">Toleransi 2 mnt</option>
           </select>
+
+          <!-- Toggle Layar Tetap Menyala -->
+          <label id="keep-awake-wrap" class="inline-flex items-center gap-2 cursor-pointer bg-earth-100/80 px-3 py-1.5 rounded-full border border-earth-200 select-none" title="Layar tidak akan padam selama sesi berjalan dan aplikasi terbuka">
+            <input type="checkbox" id="keep-awake-toggle" checked class="sr-only peer" />
+            <div class="w-8 h-4 bg-forest-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all relative peer-checked:bg-forest-600"></div>
+            <span class="text-xs font-semibold text-forest-800">Layar tetap menyala 💡</span>
+          </label>
         </div>
 
         <!-- Kutipan Motivasi Singkat -->
@@ -1373,6 +1380,25 @@
         `Hadiah jika selesai: <strong class="text-amber-700">+${coins} Koin Fokus 🪙</strong>`;
     }
 
+    // ---------- Layar tetap menyala (Screen Wake Lock) ----------
+    let wakeLock = null;
+    async function acquireWakeLock() {
+      const tg = document.getElementById('keep-awake-toggle');
+      if (!timerState.isRunning || !tg || !tg.checked || !('wakeLock' in navigator) || document.hidden || wakeLock) return;
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } catch (e) {
+        wakeLock = null;
+        console.warn('Wake Lock ditolak:', e);
+      }
+    }
+    function releaseWakeLock() {
+      if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+    }
+    // Wake lock otomatis lepas saat tab disembunyikan; ambil lagi saat kembali terlihat
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) acquireWakeLock(); });
+
     function tickTimer() {
       const rem = Math.max(0, Math.round((timerState.endTime - Date.now()) / 1000));
       timerState.remainingSeconds = rem;
@@ -1423,12 +1449,14 @@
 
       timerState.intervalId = setInterval(tickTimer, 1000);
       tickTimer();
+      acquireWakeLock();
     }
 
     function completeFocusSession() {
       clearInterval(timerState.intervalId);
       timerState.isRunning = false;
       clearActive();
+      releaseWakeLock();
       document.title = BASE_TITLE;
 
       const earned = calculateCoinsReward(timerState.durationMinutes);
@@ -1471,6 +1499,7 @@
       clearInterval(timerState.intervalId);
       timerState.isRunning = false;
       clearActive();
+      releaseWakeLock();
       document.title = BASE_TITLE;
 
       // Catat Sesi Layu
@@ -2248,11 +2277,18 @@
       const isMobile = window.matchMedia('(pointer: coarse)').matches;
       dfToggle.checked = typeof st.deepFocus === 'boolean' ? st.deepFocus : !isMobile;
       if (st.grace) dfGrace.value = String(st.grace);
+      const kaToggle = document.getElementById('keep-awake-toggle');
+      if ('wakeLock' in navigator) {
+        kaToggle.checked = typeof st.keepAwake === 'boolean' ? st.keepAwake : true;
+      } else {
+        document.getElementById('keep-awake-wrap').classList.add('hidden'); // browser tidak mendukung
+      }
       const saveSettings = () => {
-        appState.settings = { deepFocus: dfToggle.checked, grace: graceSeconds() };
+        appState.settings = { deepFocus: dfToggle.checked, grace: graceSeconds(), keepAwake: kaToggle.checked };
         saveState();
       };
       dfToggle.addEventListener('change', saveSettings);
+      kaToggle.addEventListener('change', () => { saveSettings(); if (kaToggle.checked) acquireWakeLock(); else releaseWakeLock(); });
       dfGrace.addEventListener('change', saveSettings);
 
       refreshAllViews();
