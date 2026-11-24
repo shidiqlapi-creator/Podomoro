@@ -417,7 +417,10 @@
 
       <!-- Kolom Kanan: Pengaturan Sesi (Tag, Spesies Pohon, Ringkasan Hari Ini) -->
       <div class="lg:col-span-5 space-y-6">
-        
+
+        <!-- Pulau Fokus -->
+        <div class="island-mount"></div>
+
         <!-- Kartu Pilih Tag / Kategori -->
         <div class="bg-white rounded-3xl p-6 shadow-sm border border-forest-100">
           <div class="flex items-center justify-between mb-3">
@@ -501,6 +504,9 @@
           </button>
         </div>
       </div>
+
+      <!-- Pulau Fokus -->
+      <div class="island-mount"></div>
 
       <!-- Visualisasi Lahan / Grid Hutan Isometrik-Style -->
       <div class="bg-gradient-to-b from-forest-100/70 to-earth-100/90 rounded-3xl p-6 sm:p-8 border border-forest-200/80 shadow-inner">
@@ -1310,6 +1316,166 @@
     }
 
     // ==========================================
+    // PULAU FOKUS: hutan di atas pulau yang tumbuh bersama sesi fokus
+    // ==========================================
+    const ISLAND_TIERS = [
+      { min: 0, name: 'Pulau Mungil', slots: 10 },
+      { min: 120, name: 'Pulau Rimbun', slots: 16 },
+      { min: 400, name: 'Pulau Subur', slots: 24 },
+      { min: 900, name: 'Pulau Hutan Tropis', slots: 32 },
+    ];
+    const ISLAND_CX = 200, ISLAND_CY = 190;
+    // Titik tanam tetap, diisi dari tengah pulau ke tepi (zona kolam & pondok dikosongkan)
+    const ISLAND_SLOTS = (() => {
+      const pts = [];
+      [-28, -14, 0, 14, 28].forEach((dy, r) => {
+        for (let dx = -143; dx <= 143; dx += 26) {
+          const x = dx + (r % 2 ? 13 : 0);
+          if ((x / 150) ** 2 + (dy / 36) ** 2 > 0.9) continue;
+          if (x > -132 && x < -68 && dy > -6) continue; // kolam
+          if (x > 68 && x < 134 && dy <= 6) continue;   // pondok
+          pts.push({ x, dy, d: Math.hypot(x / 150, dy / 36) + (Math.abs(x * 7 + dy * 13) % 7) / 100 });
+        }
+      });
+      return pts.sort((a, b) => a.d - b.d);
+    })();
+    let islandLastTier = null;
+    let islandKey = '';
+
+    function islandTreeSVG(speciesId, prog, withered, x, baseY, size) {
+      return getTreeSVG(speciesId, prog, withered, false).replace(
+        /<svg viewBox="0 0 200 200" class="[^"]*">/,
+        `<svg x="${(x - size / 2).toFixed(1)}" y="${(baseY - size * 0.89).toFixed(1)}" width="${size.toFixed(1)}" height="${size.toFixed(1)}" viewBox="0 0 200 200" overflow="visible">`
+      );
+    }
+
+    function islandCloud(y, scale, dur) {
+      const begin = (-((Date.now() / 1000) % dur)).toFixed(1);
+      return `<g fill="#fff" opacity="0.85"><g transform="scale(${scale})"><ellipse cx="0" cy="0" rx="26" ry="8"/><ellipse cx="-12" cy="-6" rx="14" ry="9"/><ellipse cx="9" cy="-8" rx="16" ry="10"/></g>
+        <animateTransform attributeName="transform" type="translate" values="-80 ${y}; 480 ${y}" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/></g>`;
+    }
+
+    function islandWaves(y, dur, op) {
+      const d = 'M-40 ' + y + ' q10 -5 20 0' + ' t20 0'.repeat(27);
+      return `<path d="${d}" fill="none" stroke="#fff" stroke-width="2" opacity="${op}"><animateTransform attributeName="transform" type="translate" values="0 0; -40 0" dur="${dur}s" repeatCount="indefinite"/></path>`;
+    }
+
+    function renderIsland() {
+      const mounts = document.querySelectorAll('.island-mount');
+      if (!mounts.length) return;
+      const running = timerState.isRunning;
+      const prog = running ? Math.min(1, (timerState.totalSeconds - timerState.remainingSeconds) / timerState.totalSeconds) : 0;
+      islandKey = running ? Math.floor(prog * 40) : 'idle';
+
+      const all = [...appState.sessions].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      const completed = all.filter((x) => x.status === 'completed');
+      const witheredCount = all.length - completed.length;
+      const totalMin = completed.reduce((a, x) => a + (x.durationMinutes || 0), 0);
+      let ti = 0;
+      ISLAND_TIERS.forEach((t, i) => { if (totalMin >= t.min) ti = i; });
+      const tier = ISLAND_TIERS[ti], next = ISLAND_TIERS[ti + 1];
+      if (islandLastTier !== null && ti > islandLastTier) showToast(`🎉 Pulaumu naik tingkat: ${tier.name}!`, 'success');
+      islandLastTier = ti;
+
+      const cap = Math.min(tier.slots, ISLAND_SLOTS.length);
+      const slots = ISLAND_SLOTS.slice(0, cap);
+      const shown = all.slice(-(running ? cap - 1 : cap));
+      const maxdx = Math.max(...slots.map((q) => Math.abs(q.x)));
+      const maxdy = Math.max(...slots.map((q) => Math.abs(q.dy)));
+      const gRx = maxdx + 30, gRy = Math.max(20, maxdy * 0.9 + 13);
+      const sRx = gRx + 13, sRy = gRy + 7;
+      const cx = ISLAND_CX, cy = ISLAND_CY;
+
+      // Pohon (urut dari belakang ke depan)
+      const trees = [];
+      const place = (slot, svg) => trees.push({ y: slot.dy, x: slot.x, svg });
+      const sizeOf = (q) => 40 + q.dy * 0.3 + (Math.abs(Math.round(q.x * 3 + q.dy * 5)) % 5);
+      shown.forEach((x, i) => {
+        const q = slots[i];
+        place(q, islandTreeSVG(x.speciesId, 1, x.status === 'withered', cx + q.x, cy + q.dy, sizeOf(q)));
+      });
+      if (running) {
+        const q = slots[Math.min(shown.length, cap - 1)];
+        place(q, `<ellipse cx="${cx + q.x}" cy="${cy + q.dy}" rx="17" ry="5" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="3 3"><animate attributeName="opacity" values="0.95;0.3;0.95" dur="2s" repeatCount="indefinite"/></ellipse>` +
+          islandTreeSVG(appState.selectedSpecies, prog, false, cx + q.x, cy + q.dy, sizeOf(q) + 4));
+      }
+      trees.sort((a, b) => a.y - b.y || a.x - b.x);
+
+      // Dekorasi sesuai tingkat
+      let decor = '';
+      const inGrass = (x, y) => (x / gRx) ** 2 + (y / gRy) ** 2 < 0.75;
+      decor += `<ellipse cx="${cx - gRx - 6}" cy="${cy + 9}" rx="7" ry="4" fill="#9ca3a0"/><ellipse cx="${cx + gRx + 4}" cy="${cy + 11}" rx="5" ry="3" fill="#b3bbb7"/>`;
+      if (ti >= 1) {
+        [[-112, 8, '#f9a8d4'], [-98, 14, '#fde047'], [124, 9, '#fda4af'], [112, 17, '#fde047'], [-72, 24, '#fda4af'], [92, 26, '#f9a8d4'], [-30, 30, '#fde047']]
+          .forEach(([x, y, c]) => { if (inGrass(x, y)) decor += `<circle cx="${cx + x}" cy="${cy + y}" r="2.6" fill="${c}"/>`; });
+      }
+      if (ti >= 2) {
+        decor += `<ellipse cx="${cx - 100}" cy="${cy + 6}" rx="25" ry="8" fill="#9bd3df" stroke="#d7efe9" stroke-width="2.5"/><ellipse cx="${cx - 104}" cy="${cy + 4}" rx="8" ry="2" fill="#fff" opacity="0.5"/>`;
+      }
+      if (ti >= 3) {
+        decor += `<g transform="translate(${cx + 102} ${cy - 12})"><rect x="-13" y="-2" width="26" height="15" fill="#efe3cf"/><polygon points="-17,-2 0,-17 17,-2" fill="#b45f3c"/><rect x="-4" y="4" width="8" height="9" fill="#8a5a3b"/><rect x="6" y="3" width="5" height="5" fill="#9bd3df"/></g>`;
+      }
+      const birds = ti >= 3 ? `<g fill="none" stroke="#35574a" stroke-width="1.6" stroke-linecap="round"><path d="M0 0 q4 -4 8 0 q4 -4 8 0"/><animateTransform attributeName="transform" type="translate" values="-30 58; 430 40" dur="38s" begin="${(-((Date.now() / 1000) % 38)).toFixed(1)}s" repeatCount="indefinite"/></g>` : '';
+
+      const sunX = running ? 50 + 300 * prog : 326;
+      const sunY = running ? 64 - 40 * Math.sin(Math.PI * prog) : 46;
+
+      const species = TREE_SPECIES.find((x) => x.id === appState.selectedSpecies) || TREE_SPECIES[0];
+      const sub = running
+        ? `🌱 ${species.name} sedang tumbuh • ${Math.round(prog * 100)}%`
+        : `${completed.length} pohon sehat • ${witheredCount} layu • ${totalMin} menit fokus`;
+      const pct = next ? Math.min(100, Math.round(((totalMin - tier.min) / (next.min - tier.min)) * 100)) : 100;
+      const nextTxt = next ? `Fokus ${next.min - totalMin} menit lagi untuk membuka ${next.name}` : 'Tingkat tertinggi tercapai 🎉';
+      const moreTxt = all.length > shown.length + (running ? 1 : 0) ? ` • menampilkan ${shown.length} pohon terbaru` : '';
+
+      const body = `
+        <rect width="400" height="250" fill="url(#isl-sky-__S__)"/>
+        <circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="34" fill="url(#isl-glow-__S__)"/>
+        <circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="15" fill="#ffe08a"/>
+        ${islandCloud(34, 1, 90)}${islandCloud(70, 0.7, 120)}
+        ${birds}
+        <rect y="150" width="400" height="100" fill="url(#isl-sea-__S__)"/>
+        ${islandWaves(162, 5, 0.3)}${islandWaves(226, 6, 0.28)}${islandWaves(242, 4.5, 0.2)}
+        <g transform="translate(${cx} ${cy}) scale(${[1.35, 1.2, 1.08, 1][ti]}) translate(${-cx} ${-cy})">
+        <ellipse cx="${cx}" cy="${cy + 9}" rx="${sRx}" ry="${sRy}" fill="#b89d6e"/>
+        <ellipse cx="${cx}" cy="${cy + 3}" rx="${sRx}" ry="${sRy}" fill="#ecdcb4"/>
+        <ellipse cx="${cx}" cy="${cy + 3}" rx="${sRx + 5}" ry="${sRy + 3}" fill="none" stroke="#fff" stroke-width="2.5" opacity="0.55"/>
+        <ellipse cx="${cx}" cy="${cy}" rx="${gRx}" ry="${gRy}" fill="url(#isl-grass-__S__)"/>
+        ${decor}
+        ${trees.map((t) => t.svg).join('')}
+        </g>`;
+
+      const defs = `<defs>
+        <linearGradient id="isl-sky-__S__" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9d8ee"/><stop offset="1" stop-color="#eaf7ef"/></linearGradient>
+        <linearGradient id="isl-sea-__S__" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#63b4c8"/><stop offset="1" stop-color="#2d7a90"/></linearGradient>
+        <linearGradient id="isl-grass-__S__" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#86bb8f"/><stop offset="1" stop-color="#4f9064"/></linearGradient>
+        <radialGradient id="isl-glow-__S__"><stop offset="0" stop-color="#fff3b8" stop-opacity="0.9"/><stop offset="1" stop-color="#fff3b8" stop-opacity="0"/></radialGradient></defs>`;
+
+      mounts.forEach((m, i) => {
+        m.innerHTML = `
+          <div class="bg-white rounded-3xl shadow-sm border border-forest-100 overflow-hidden">
+            <div class="px-5 pt-4 pb-3 flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h2 class="font-display font-bold text-base text-forest-900">Pulau Fokus 🏝️</h2>
+                <p class="text-xs text-forest-600 mt-0.5">${sub}${moreTxt}</p>
+              </div>
+              <span class="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-forest-50 border border-forest-100 text-forest-700">${tier.name}</span>
+            </div>
+            <svg viewBox="0 0 400 250" class="w-full block" role="img" aria-label="Pulau berisi pohon-pohon hasil sesi fokusmu" preserveAspectRatio="xMidYMid slice">${(defs + body).replaceAll('__S__', i)}</svg>
+            <div class="px-5 pt-3 pb-4">
+              <div class="h-1.5 rounded-full bg-forest-100 overflow-hidden"><div class="h-full bg-forest-500 rounded-full transition-all" style="width:${pct}%"></div></div>
+              <p class="text-[11px] text-forest-600 mt-1.5">${nextTxt}</p>
+            </div>
+          </div>`;
+      });
+    }
+
+    function maybeRenderIsland() {
+      const key = timerState.isRunning ? Math.floor(((timerState.totalSeconds - timerState.remainingSeconds) / timerState.totalSeconds) * 40) : 'idle';
+      if (key !== islandKey) renderIsland();
+    }
+
+    // ==========================================
     // 4. LOGIKA TIMER & DEEP FOCUS
     // ==========================================
     const RING_CIRCUMFERENCE = 2 * Math.PI * 116; // ~728.85
@@ -1374,6 +1540,7 @@
 
       // Update Estimasi Koin
       document.title = timerState.isRunning ? `${formatTime(timerState.remainingSeconds)} • SylvaFocus` : BASE_TITLE;
+      maybeRenderIsland();
 
       const coins = calculateCoinsReward(timerState.durationMinutes);
       document.getElementById('reward-preview').innerHTML =
@@ -2161,6 +2328,7 @@
     function refreshAllViews() {
       // Update Header Coins
       document.getElementById('header-coins').textContent = appState.coins;
+      renderIsland();
 
       // Update Ringkasan Hari Ini di Halaman Fokus
       const today = new Date();
